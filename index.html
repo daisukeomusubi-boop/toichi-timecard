@@ -1,0 +1,777 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="toichi タイムカード">
+<title>toichi タイムカード</title>
+<style>
+html,body{margin:0;padding:0;height:100%;overflow:hidden;}
+@keyframes fadeUp{from{opacity:0;transform:translateY(12px);}to{opacity:1;transform:translateY(0);}}
+@keyframes pulse{0%,100%{opacity:1;}50%{opacity:0.4;}}
+@keyframes slideIn{from{opacity:0;transform:translateX(-10px);}to{opacity:1;transform:translateX(0);}}
+@keyframes toastIn{from{opacity:0;transform:translate(-50%,20px);}to{opacity:1;transform:translate(-50%,0);}}
+@keyframes gridScroll{from{transform:translateY(0);}to{transform:translateY(40px);}}
+@keyframes glowP{0%,100%{opacity:.25;}50%{opacity:.5;}}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
+button{font-family:inherit;cursor:pointer;}button:active{transform:scale(0.97);}
+::-webkit-scrollbar{width:5px;}::-webkit-scrollbar-track{background:transparent;}::-webkit-scrollbar-thumb{background:#1e293b;border-radius:3px;}
+.root{min-height:100vh;background:#0b1120;font-family:'Noto Sans JP','DM Sans','Hiragino Kaku Gothic ProN','Yu Gothic',sans-serif;color:#94a3b8;position:relative;overflow:hidden;}
+.bg-grid{position:fixed;inset:0;z-index:0;pointer-events:none;opacity:.035;background-image:linear-gradient(#334155 1px,transparent 1px),linear-gradient(90deg,#334155 1px,transparent 1px);background-size:40px 40px;animation:gridScroll 8s linear infinite;}
+.bg-glow{position:fixed;top:-30%;left:-10%;width:60%;height:60%;background:radial-gradient(ellipse at center,#0ea5e910 0%,transparent 70%);z-index:0;pointer-events:none;animation:glowP 6s ease-in-out infinite;}
+.header{position:relative;z-index:10;display:flex;align-items:center;justify-content:space-between;padding:12px 24px;background:linear-gradient(180deg,#0f172a,#0f172aee);border-bottom:1px solid #1e293b;backdrop-filter:blur(12px);}
+.h-left{display:flex;align-items:center;gap:14px;}.h-right{display:flex;align-items:center;gap:16px;}
+.logo{width:40px;height:40px;border-radius:10px;background:linear-gradient(135deg,#0ea5e9,#06b6d4);display:flex;align-items:center;justify-content:center;font-size:22px;font-weight:700;color:#fff;font-family:'DM Sans',sans-serif;box-shadow:0 4px 20px #0ea5e940;}
+.brand{color:#f1f5f9;font-weight:700;font-size:17px;letter-spacing:.5px;}.brand-sub{color:#475569;font-size:11px;margin-top:1px;}
+.nav{display:flex;gap:4px;}.nav-btn{padding:8px 16px;border-radius:8px;border:1px solid transparent;background:transparent;color:#64748b;font-size:13px;font-weight:500;transition:all .2s;display:flex;align-items:center;gap:6px;}.nav-btn.active{background:#1e293b;color:#22d3ee;border-color:#0ea5e930;}
+.h-store{padding:6px 14px;border-radius:8px;background:#1e293b;color:#64748b;font-size:12px;font-weight:500;border:1px solid #334155;}
+.sync-badge{padding:4px 10px;border-radius:6px;font-size:11px;font-weight:600;}.sync-ok{background:#06523420;color:#22c55e;border:1px solid #22c55e30;}.sync-err{background:#dc262620;color:#f87171;border:1px solid #f8717130;}.sync-ing{background:#f59e0b20;color:#f59e0b;border:1px solid #f59e0b30;}
+.clock-layout{position:relative;z-index:1;display:flex;height:calc(100vh - 65px);}
+.left{width:340px;min-width:340px;height:100%;background:#0f172a;border-right:1px solid #1e293b;display:flex;flex-direction:column;overflow:hidden;}
+.left-hd{padding:20px 20px 14px;border-bottom:1px solid #1e293b;}.left-t{color:#cbd5e1;font-size:14px;font-weight:600;}.left-s{color:#475569;font-size:11px;margin-top:4px;}
+.st-tabs{display:flex;padding:8px 12px;border-bottom:1px solid #1e293b;}.st-tab{flex:1;padding:8px 4px;border-radius:6px;border:none;background:transparent;color:#64748b;font-size:12px;font-weight:500;cursor:pointer;transition:all .15s;}.st-tab.active{background:#1e293b;color:#22d3ee;}
+.st-list{flex:1;overflow-y:auto;padding:8px;}
+.st-card{padding:14px 16px;border-radius:10px;background:#0b1120;border:1px solid #1e293b;margin-bottom:6px;cursor:pointer;transition:all .2s;display:flex;align-items:center;gap:12px;animation:slideIn .25s ease;}.st-card:hover,.st-card.sel{border-color:#0ea5e950;background:#0ea5e908;}
+.st-av{width:40px;height:40px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:700;color:#fff;}
+.st-nm{color:#e2e8f0;font-size:14px;font-weight:600;}.st-inf{color:#64748b;font-size:11px;margin-top:2px;}
+.right{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:40px;overflow-y:auto;}
+.time-wrap{display:flex;align-items:baseline;gap:4px;margin-bottom:48px;}.big-t{font-size:96px;font-weight:300;letter-spacing:-2px;color:#f1f5f9;font-family:'DM Sans','Courier New',monospace;line-height:1;}.big-s{font-size:32px;font-weight:300;color:#475569;font-family:'Courier New',monospace;}
+.prompt{color:#334155;font-size:18px;text-align:center;line-height:1.8;}
+.punch-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:32px;width:100%;max-width:560px;}.punch{padding:22px 8px;border-radius:50%;border:2px solid;font-size:15px;font-weight:700;transition:all .25s;width:110px;height:110px;display:flex;align-items:center;justify-content:center;margin:0 auto;}.punch.pri{transform:scale(1.08);}.punch.pri:hover{transform:scale(1.12);}.punch.on:not(.pri):hover{filter:brightness(1.2);}.punch.off{cursor:default;}.punch.off:active{transform:none;}
+.stamps{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;width:100%;max-width:560px;}.stamp{text-align:center;padding:12px 8px;background:#0f172a;border-radius:10px;border:1px solid #1e293b;}.stamp-v{font-size:18px;font-weight:500;color:#e2e8f0;font-family:'Courier New',monospace;margin-bottom:4px;}.stamp-l{font-size:11px;color:#475569;}
+.total{margin-top:20px;padding:12px 24px;border-radius:10px;background:#0ea5e910;border:1px solid #0ea5e930;color:#22d3ee;font-size:15px;}
+.shifts-history{margin-top:16px;width:100%;max-width:560px;padding:12px 16px;background:#0f172a;border-radius:10px;border:1px solid #1e293b;}.shift-row{display:flex;align-items:center;gap:12px;padding:6px 0;font-size:13px;}.shift-row+.shift-row{border-top:1px solid #1e293b;}.shift-num{font-size:11px;color:#64748b;background:#1e293b;padding:2px 8px;border-radius:4px;font-weight:600;}
+.fade-up{animation:fadeUp .3s ease;}
+.cal-nav{display:flex;align-items:center;justify-content:center;gap:16px;margin-bottom:16px;}.cal-arrow{padding:8px 14px;border-radius:8px;border:1px solid #334155;background:#1e293b;color:#94a3b8;font-size:14px;transition:all .2s;}.cal-arrow:hover{color:#22d3ee;border-color:#0ea5e950;}.cal-month{font-size:18px;font-weight:700;color:#e2e8f0;min-width:140px;text-align:center;}.today-btn{padding:6px 14px;border-radius:8px;border:1px solid #0ea5e930;background:#0ea5e920;color:#22d3ee;font-size:12px;font-weight:600;margin-left:4px;}
+.cal-summary{display:flex;gap:20px;justify-content:center;margin-bottom:12px;font-size:14px;color:#94a3b8;flex-wrap:wrap;}
+.cal-salary{display:flex;gap:16px;justify-content:center;margin-bottom:16px;font-size:14px;flex-wrap:wrap;}.sal-card{background:#0f172a;border:1px solid #1e293b;border-radius:8px;padding:8px 16px;text-align:center;}.sal-v{font-size:18px;font-weight:700;color:#22d3ee;}.sal-l{font-size:11px;color:#64748b;margin-top:2px;}
+table.cal{width:100%;max-width:900px;border-collapse:collapse;margin-bottom:20px;font-size:13px;}table.cal th{color:#64748b;font-weight:600;padding:8px 4px;border-bottom:1px solid #1e293b;}table.cal td{padding:8px 6px;border-bottom:1px solid #0f172a;text-align:center;color:#94a3b8;}table.cal tr:hover td{background:#1e293b20;}.cal-sun{color:#f87171;}.cal-sat{color:#60a5fa;}.cal-today{background:#0ea5e915;border-radius:4px;}
+.admin-layout{position:relative;z-index:1;padding:30px;overflow-y:auto;height:calc(100vh - 65px);}.admin-tabs{display:flex;gap:6px;margin-bottom:24px;flex-wrap:wrap;}.adm-tab{padding:10px 20px;border-radius:8px;border:1px solid #1e293b;background:#0f172a;color:#64748b;font-size:13px;font-weight:500;transition:all .2s;}.adm-tab.active{background:#0ea5e920;color:#22d3ee;border-color:#0ea5e940;}
+.card{background:#0f172a;border:1px solid #1e293b;border-radius:12px;padding:20px;margin-bottom:16px;animation:fadeUp .3s ease;}.card-t{color:#e2e8f0;font-weight:700;font-size:15px;margin-bottom:16px;display:flex;align-items:center;gap:8px;}
+.form-row{display:flex;gap:12px;margin-bottom:12px;flex-wrap:wrap;align-items:flex-end;}.form-g{display:flex;flex-direction:column;gap:4px;flex:1;min-width:120px;}.form-g label{font-size:11px;color:#64748b;font-weight:600;}
+input[type=text],input[type=number],input[type=time],select{padding:10px 14px;border-radius:8px;border:1px solid #1e293b;background:#0b1120;color:#e2e8f0;font-size:14px;font-family:inherit;width:100%;transition:border-color .2s;}input:focus,select:focus{outline:none;border-color:#0ea5e9;}
+.btn{padding:10px 20px;border-radius:8px;border:none;font-weight:600;font-size:13px;transition:all .2s;}.btn-p{background:linear-gradient(135deg,#0ea5e9,#06b6d4);color:#fff;box-shadow:0 4px 20px #0ea5e930;}.btn-p:hover{filter:brightness(1.1);}.btn-s{background:#1e293b;color:#94a3b8;border:1px solid #334155;}.btn-d{background:#dc2626;color:#fff;}
+.tbl{width:100%;border-collapse:collapse;font-size:13px;}.tbl th{text-align:left;padding:10px 12px;color:#64748b;font-weight:600;border-bottom:1px solid #1e293b;}.tbl td{padding:10px 12px;border-bottom:1px solid #0f172a;color:#94a3b8;}.tbl tr:hover td{background:#1e293b20;}
+.badge{padding:3px 10px;border-radius:6px;font-size:11px;font-weight:600;}.badge-b{background:#0ea5e920;color:#22d3ee;}.badge-g{background:#22c55e20;color:#22c55e;}
+.modal-bg{position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:100;display:flex;align-items:center;justify-content:center;animation:fadeUp .2s ease;}.modal{background:#1e293b;border-radius:16px;padding:28px;width:90%;max-width:360px;box-shadow:0 20px 60px rgba(0,0,0,.6);}.modal-lg{max-width:700px;max-height:85vh;overflow-y:auto;}
+.modal-title{font-weight:700;font-size:16px;color:#e2e8f0;margin-bottom:20px;}.close-x{background:none;border:1px solid #334155;border-radius:8px;color:#64748b;padding:4px 10px;font-size:16px;cursor:pointer;}.close-x:hover{color:#f1f5f9;}
+.modal-cancel{flex:1;padding:12px;border-radius:10px;border:1px solid #1e293b;background:#1e293b;color:#94a3b8;font-weight:600;}.modal-save{flex:1;padding:12px;border-radius:10px;border:none;background:linear-gradient(135deg,#0ea5e9,#06b6d4);color:#fff;font-weight:700;box-shadow:0 4px 20px #0ea5e930;}.modal-save:hover{filter:brightness(1.1);}.modal-del{flex:1;padding:12px;border-radius:10px;border:none;background:#dc2626;color:#fff;font-weight:700;}
+.pin-dot{width:48px;height:56px;border-radius:10px;background:#1e293b;border:2px solid;display:flex;align-items:center;justify-content:center;font-size:24px;font-weight:700;color:#e2e8f0;font-family:'Courier New',monospace;transition:all .15s;}.pin-pad{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;max-width:240px;margin:0 auto;}.pin-key{padding:14px 0;border-radius:10px;border:1px solid #334155;background:#0f172a;color:#e2e8f0;font-size:20px;font-weight:600;font-family:'DM Sans',sans-serif;transition:all .1s;}.pin-key:hover{background:#1e293b;}.pin-cancel{margin-top:16px;padding:8px 24px;border-radius:8px;border:1px solid #334155;background:transparent;color:#64748b;font-size:13px;cursor:pointer;}
+.toast{position:fixed;bottom:30px;left:50%;transform:translateX(-50%);color:#fff;padding:14px 28px;border-radius:12px;font-size:14px;font-weight:600;z-index:999;display:flex;align-items:center;gap:10px;box-shadow:0 8px 30px rgba(0,0,0,.4);animation:toastIn .3s ease;}.toast-ok{background:linear-gradient(135deg,#0ea5e9,#06b6d4);}.toast-err{background:#dc2626;}.toast-ic{width:24px;height:24px;border-radius:50%;background:rgba(255,255,255,.2);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;}
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script>
+// ═══════════════════════════════════════════════════════════════
+// （株）toichi タイムカード v7 — クラウド版（Googleスプレッドシート連携）
+// ═══════════════════════════════════════════════════════════════
+
+var GAS_URL = "https://script.google.com/macros/s/AKfycbwPcLeqrT4ecdYZckSCASbq-WdjxHQPeQ_w70cB4qEM4fIY-fvUUAqYXNljRIzyJoNqYw/exec";
+var SYNC_INTERVAL = 30000;
+var DEFAULT_STORES = ["橿原本店", "北堀江店", "心斎橋toichibowl"];
+var ADMIN_PIN = "0910";
+var SK = { staff: "toichi_s5", records: "toichi_r5", stores: "toichi_stores5" };
+
+function load(k, fb) { try { var d = localStorage.getItem(k); return d ? JSON.parse(d) : fb; } catch(e) { return fb; } }
+function save(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch(e) {} }
+
+var state = {
+  view: "clock", adminTab: "staff", sel: null, pin: "", showPin: false,
+  staff: load(SK.staff, []), records: load(SK.records, []),
+  stores: load(SK.stores, DEFAULT_STORES.slice()),
+  storeFilter: "all", month: (function() { var d = new Date(); return d.getFullYear() + "-" + String(d.getMonth()+1).padStart(2,"0"); })(),
+  showCal: false, toast: null, toastTimer: null,
+  newName: "", newStore: "", newType: "hour", newRate: "", newRateH: "", newTransport: "0",
+  editStaff: null, confirmDel: null, editStoreIdx: null, editStoreName: "",
+  newStoreName: "", editRec: null,
+  syncStatus: "idle" // idle, syncing, ok, error
+};
+
+function saveAll() { save(SK.staff, state.staff); save(SK.records, state.records); save(SK.stores, state.stores); }
+
+// ═══════════ API通信（CORS修正版） ═══════════
+function apiGet(action, callback) {
+  state.syncStatus = "syncing"; render();
+  fetch(GAS_URL + "?action=" + action, { redirect: "follow" })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+      state.syncStatus = "ok";
+      if (callback) callback(data);
+    })
+    .catch(function(e) {
+      console.warn("API GET error:", e);
+      state.syncStatus = "error";
+      render();
+    });
+}
+
+function apiPost(body, callback) {
+  fetch(GAS_URL, {
+    method: "POST",
+    headers: { "Content-Type": "text/plain" },
+    body: JSON.stringify(body),
+    redirect: "follow"
+  })
+    .then(function(r) { return r.json(); })
+    .then(function(data) { if (callback) callback(data); })
+    .catch(function(e) { console.warn("API POST error:", e); });
+}
+
+function syncFromServer(showFlashMsg) {
+  apiGet("getAll", function(data) {
+    if (!data.ok) { state.syncStatus = "error"; render(); return; }
+    if (data.stores && data.stores.length > 0) state.stores = data.stores;
+    if (data.staff) {
+      state.staff = data.staff.map(function(s) {
+        return { id: String(s.id), name: String(s.name), store: String(s.store), type: String(s.type), rate: Number(s.rate) || 0, rateH: Number(s.rateH) || 0, transport: Number(s.transport) || 0 };
+      });
+    }
+    if (data.records) {
+      state.records = data.records.map(function(r) {
+        return { staffId: String(r.staffId), date: String(r.date), clockIn: r.clockIn || null, clockOut: r.clockOut || null, breakStart: r.breakStart || null, breakEnd: r.breakEnd || null, store: r.store || "" };
+      });
+    }
+    saveAll();
+    if (showFlashMsg) flash("サーバーと同期しました");
+    render();
+  });
+}
+
+// ═══════════ UTILS ═══════════
+function now() { return new Date(); }
+function toK(d) { return d.getFullYear() + "-" + String(d.getMonth()+1).padStart(2,"0") + "-" + String(d.getDate()).padStart(2,"0"); }
+function fmt(iso) { if (!iso) return "--:--"; var d = new Date(iso); return String(d.getHours()).padStart(2,"0") + ":" + String(d.getMinutes()).padStart(2,"0"); }
+function diffMin(a, b) { if (!a || !b) return 0; return Math.round((new Date(b) - new Date(a)) / 60000); }
+function flash(msg, type) {
+  if (state.toastTimer) clearTimeout(state.toastTimer);
+  state.toast = { msg: msg, type: type || "ok" };
+  render();
+  state.toastTimer = setTimeout(function() { state.toast = null; render(); }, 2500);
+}
+var avColors = ["#0ea5e9","#8b5cf6","#f59e0b","#10b981","#ec4899","#06b6d4","#f97316","#6366f1"];
+function avColor(i) { return avColors[i % avColors.length]; }
+
+// ═══════════ PUNCH ═══════════
+function punch(sid, act) {
+  var ts = new Date().toISOString();
+  var todayK = toK(now());
+  var sn = state.staff.find(function(x) { return x.id === sid; });
+  var storeName = sn ? sn.store : "";
+  var dayRecs = state.records.filter(function(r) { return r.staffId === sid && r.date === todayK; });
+  var latest = dayRecs.length > 0 ? dayRecs[dayRecs.length - 1] : null;
+  if (act === "clockIn") {
+    if (latest && !latest.clockOut) return;
+    var newRec = { staffId: sid, date: todayK, clockIn: ts, clockOut: null, breakStart: null, breakEnd: null, store: storeName };
+    state.records.push(newRec);
+    apiPost({ action: "punch", isNew: true, record: newRec });
+  } else {
+    if (!latest) return;
+    var li = -1;
+    for (var i = state.records.length - 1; i >= 0; i--) {
+      var r = state.records[i];
+      if (r.staffId === sid && r.date === todayK && r.clockIn === latest.clockIn) { li = i; break; }
+    }
+    if (li === -1) return;
+    state.records[li][act] = ts;
+    apiPost({ action: "punch", isNew: false, record: { staffId: sid, date: todayK, origClockIn: latest.clockIn, clockIn: state.records[li].clockIn, clockOut: state.records[li].clockOut || "", breakStart: state.records[li].breakStart || "", breakEnd: state.records[li].breakEnd || "" } });
+  }
+  saveAll();
+  var lb = { clockIn: "出勤", clockOut: "退勤", breakStart: "休憩入り", breakEnd: "休憩戻り" };
+  flash((sn ? sn.name : "") + " — " + lb[act] + " " + fmt(ts));
+}
+
+// ═══════════ HTML HELPERS ═══════════
+function h(tag, attrs, children) {
+  var el = document.createElement(tag);
+  if (attrs) {
+    Object.keys(attrs).forEach(function(k) {
+      if (k === "className") el.className = attrs[k];
+      else if (k === "onclick" || k === "onchange" || k === "oninput") el[k] = attrs[k];
+      else if (k === "style" && typeof attrs[k] === "object") Object.keys(attrs[k]).forEach(function(sk) { el.style[sk] = attrs[k][sk]; });
+      else if (k === "disabled") { if (attrs[k]) el.disabled = true; }
+      else if (k === "innerHTML") el.innerHTML = attrs[k];
+      else el.setAttribute(k, attrs[k]);
+    });
+  }
+  if (children !== undefined && children !== null) {
+    if (typeof children === "string" || typeof children === "number") el.textContent = String(children);
+    else if (Array.isArray(children)) children.forEach(function(c) { if (c) el.appendChild(c); });
+    else if (children instanceof HTMLElement) el.appendChild(children);
+  }
+  return el;
+}
+function txt(s) { return document.createTextNode(s); }
+
+// ═══════════ RENDER ═══════════
+function render() {
+  var root = document.getElementById("root");
+  root.innerHTML = "";
+  var container = h("div", { className: "root" });
+  container.appendChild(h("div", { className: "bg-grid" }));
+  container.appendChild(h("div", { className: "bg-glow" }));
+  container.appendChild(renderHeader());
+  if (state.view === "clock") container.appendChild(renderClockView());
+  else container.appendChild(renderAdminView());
+  if (state.showPin) container.appendChild(renderPinModal());
+  if (state.showCal && state.sel) container.appendChild(renderCalModal());
+  if (state.toast) container.appendChild(renderToast());
+  root.appendChild(container);
+}
+
+function renderHeader() {
+  var hLeft = h("div", { className: "h-left" }, [
+    h("div", { className: "logo" }, "t"),
+    h("div", null, [
+      h("div", { className: "brand" }, "（株）toichi　タイムカード"),
+      h("div", { className: "brand-sub" }, "トイチパンケーキ 勤怠管理システム v7")
+    ])
+  ]);
+  var syncLabel = { idle: "", syncing: "同期中…", ok: "同期済", error: "同期エラー" };
+  var syncClass = { idle: "", syncing: "sync-badge sync-ing", ok: "sync-badge sync-ok", error: "sync-badge sync-err" };
+  var navBtns = [
+    { k: "clock", l: "打刻", i: "⏱" },
+    { k: "admin", l: "管理", i: "⚙" }
+  ].map(function(t) {
+    return h("button", { className: "nav-btn" + (state.view === t.k ? " active" : ""), onclick: function() { if (t.k === "admin" && state.view !== "admin") { state.showPin = true; state.pin = ""; render(); } else { state.view = t.k; render(); } } }, t.i + " " + t.l);
+  });
+  var hRight = h("div", { className: "h-right" });
+  if (state.syncStatus !== "idle") {
+    hRight.appendChild(h("span", { className: syncClass[state.syncStatus] }, syncLabel[state.syncStatus]));
+  }
+  hRight.appendChild(h("button", { className: "btn btn-s", style: { fontSize: "11px", padding: "6px 12px" }, onclick: function() { syncFromServer(true); } }, "↻ 同期"));
+  var nav = h("div", { className: "nav" });
+  navBtns.forEach(function(b) { nav.appendChild(b); });
+  hRight.appendChild(nav);
+  var header = h("div", { className: "header" }, [hLeft, hRight]);
+  return header;
+}
+
+function renderClockView() {
+  var layout = h("div", { className: "clock-layout" });
+  var leftPanel = h("div", { className: "left" });
+  var leftHd = h("div", { className: "left-hd" }, [
+    h("div", { className: "left-t" }, "スタッフ一覧"),
+    h("div", { className: "left-s" }, state.staff.length + "名登録中")
+  ]);
+  leftPanel.appendChild(leftHd);
+  var tabs = h("div", { className: "st-tabs" });
+  ["all"].concat(state.stores).forEach(function(st) {
+    tabs.appendChild(h("button", { className: "st-tab" + (state.storeFilter === st ? " active" : ""), onclick: function() { state.storeFilter = st; render(); } }, st === "all" ? "全店舗" : st));
+  });
+  leftPanel.appendChild(tabs);
+  var list = h("div", { className: "st-list" });
+  var filtered = state.staff.filter(function(s) { return state.storeFilter === "all" || s.store === state.storeFilter; });
+  filtered.forEach(function(s, i) {
+    var card = h("div", { className: "st-card" + (state.sel === s.id ? " sel" : ""), onclick: function() { state.sel = s.id; render(); } }, [
+      h("div", { className: "st-av", style: { background: avColor(i) } }, s.name.charAt(0)),
+      h("div", null, [
+        h("div", { className: "st-nm" }, s.name),
+        h("div", { className: "st-inf" }, s.store + " / " + (s.type === "hour" ? "時給" : "月給"))
+      ])
+    ]);
+    list.appendChild(card);
+  });
+  leftPanel.appendChild(list);
+  layout.appendChild(leftPanel);
+  var right = h("div", { className: "right fade-up" });
+  var n = now();
+  var timeH = String(n.getHours()).padStart(2,"0") + ":" + String(n.getMinutes()).padStart(2,"0");
+  var timeS = String(n.getSeconds()).padStart(2,"0");
+  right.appendChild(h("div", { className: "time-wrap" }, [
+    h("div", { className: "big-t" }, timeH),
+    h("div", { className: "big-s" }, timeS)
+  ]));
+  if (!state.sel) {
+    right.appendChild(h("div", { className: "prompt" }, "← スタッフを選択してください"));
+  } else {
+    var sn = state.staff.find(function(x) { return x.id === state.sel; });
+    if (!sn) { right.appendChild(h("div", { className: "prompt" }, "スタッフが見つかりません")); }
+    else {
+      var todayK = toK(n);
+      var dayRecs = state.records.filter(function(r) { return r.staffId === sn.id && r.date === todayK; });
+      var latest = dayRecs.length > 0 ? dayRecs[dayRecs.length - 1] : null;
+      var canIn = !latest || !!latest.clockOut;
+      var canOut = !!latest && !latest.clockOut;
+      var canBrkS = canOut && !latest.breakStart;
+      var canBrkE = canOut && !!latest.breakStart && !latest.breakEnd;
+      var btns = [
+        { act: "clockIn", l: "出勤", on: canIn, pri: canIn, c: "#0ea5e9" },
+        { act: "clockOut", l: "退勤", on: canOut, pri: canOut && !canBrkS, c: "#f59e0b" },
+        { act: "breakStart", l: "休憩入", on: canBrkS, pri: false, c: "#8b5cf6" },
+        { act: "breakEnd", l: "休憩戻", on: canBrkE, pri: canBrkE, c: "#10b981" }
+      ];
+      var grid = h("div", { className: "punch-grid" });
+      btns.forEach(function(b) {
+        grid.appendChild(h("button", {
+          className: "punch " + (b.on ? "on" : "off") + (b.pri ? " pri" : ""),
+          disabled: !b.on,
+          style: { borderColor: b.on ? b.c : "#1e293b", color: b.on ? b.c : "#334155", background: b.on ? b.c + "10" : "transparent" },
+          onclick: b.on ? function() { punch(sn.id, b.act); } : null
+        }, b.l));
+      });
+      right.appendChild(grid);
+      var stamps = h("div", { className: "stamps" });
+      [{ k: "clockIn", l: "出勤" }, { k: "clockOut", l: "退勤" }, { k: "breakStart", l: "休憩入" }, { k: "breakEnd", l: "休憩戻" }].forEach(function(s) {
+        stamps.appendChild(h("div", { className: "stamp" }, [
+          h("div", { className: "stamp-v" }, latest ? fmt(latest[s.k]) : "--:--"),
+          h("div", { className: "stamp-l" }, s.l)
+        ]));
+      });
+      right.appendChild(stamps);
+      if (latest && latest.clockIn && latest.clockOut) {
+        var work = diffMin(latest.clockIn, latest.clockOut);
+        var brk = diffMin(latest.breakStart, latest.breakEnd);
+        right.appendChild(h("div", { className: "total" }, "実働: " + Math.floor((work - brk) / 60) + "h " + ((work - brk) % 60) + "m（休憩" + brk + "分）"));
+      }
+      if (dayRecs.length > 1) {
+        var hist = h("div", { className: "shifts-history" });
+        hist.appendChild(h("div", { style: { fontSize: "12px", color: "#64748b", marginBottom: "8px" } }, "本日のシフト履歴"));
+        dayRecs.forEach(function(r, ri) {
+          hist.appendChild(h("div", { className: "shift-row" }, [
+            h("span", { className: "shift-num" }, "#" + (ri + 1)),
+            h("span", null, fmt(r.clockIn) + " → " + fmt(r.clockOut)),
+            h("span", { style: { color: "#475569" } }, "休憩 " + diffMin(r.breakStart, r.breakEnd) + "分")
+          ]));
+        });
+        right.appendChild(hist);
+      }
+      right.appendChild(h("button", { className: "btn btn-s", style: { marginTop: "20px" }, onclick: function() { state.showCal = true; state.month = toK(now()).substring(0, 7); render(); } }, "📅 カレンダー・月次集計"));
+    }
+  }
+  layout.appendChild(right);
+  return layout;
+}
+
+function renderAdminView() {
+  var layout = h("div", { className: "admin-layout" });
+  var tabs = h("div", { className: "admin-tabs" });
+  [{ k: "staff", l: "👤 スタッフ管理" }, { k: "store", l: "🏪 店舗管理" }, { k: "records", l: "📝 打刻修正" }].forEach(function(t) {
+    tabs.appendChild(h("button", { className: "adm-tab" + (state.adminTab === t.k ? " active" : ""), onclick: function() { state.adminTab = t.k; render(); } }, t.l));
+  });
+  layout.appendChild(tabs);
+  if (state.adminTab === "staff") layout.appendChild(renderStaffAdmin());
+  else if (state.adminTab === "store") layout.appendChild(renderStoreAdmin());
+  else layout.appendChild(renderRecordsAdmin());
+  return layout;
+}
+
+function renderStaffAdmin() {
+  var wrap = h("div");
+  var card = h("div", { className: "card" });
+  card.appendChild(h("div", { className: "card-t" }, "➕ 新規スタッフ追加"));
+  var row1 = h("div", { className: "form-row" });
+  row1.appendChild(h("div", { className: "form-g" }, [h("label", null, "名前"), h("input", { type: "text", value: state.newName, oninput: function(e) { state.newName = e.target.value; } })]));
+  var sel = h("select", { onchange: function(e) { state.newStore = e.target.value; } });
+  state.stores.forEach(function(s) { var o = h("option", { value: s }, s); if (s === state.newStore) o.selected = true; sel.appendChild(o); });
+  row1.appendChild(h("div", { className: "form-g" }, [h("label", null, "店舗"), sel]));
+  var typeSel = h("select", { onchange: function(e) { state.newType = e.target.value; } });
+  [["hour", "時給"], ["month", "月給"]].forEach(function(t) { var o = h("option", { value: t[0] }, t[1]); if (t[0] === state.newType) o.selected = true; typeSel.appendChild(o); });
+  row1.appendChild(h("div", { className: "form-g" }, [h("label", null, "給与形態"), typeSel]));
+  card.appendChild(row1);
+  var row2 = h("div", { className: "form-row" });
+  row2.appendChild(h("div", { className: "form-g" }, [h("label", null, "平日時給(¥)"), h("input", { type: "number", value: state.newRate, oninput: function(e) { state.newRate = e.target.value; } })]));
+  row2.appendChild(h("div", { className: "form-g" }, [h("label", null, "休日時給(¥)"), h("input", { type: "number", value: state.newRateH, oninput: function(e) { state.newRateH = e.target.value; } })]));
+  row2.appendChild(h("div", { className: "form-g" }, [h("label", null, "交通費(¥/日)"), h("input", { type: "number", value: state.newTransport, oninput: function(e) { state.newTransport = e.target.value; } })]));
+  row2.appendChild(h("div", { className: "form-g", style: { justifyContent: "flex-end" } }, [h("button", { className: "btn btn-p", onclick: addStaffFn }, "追加")]));
+  card.appendChild(row2);
+  wrap.appendChild(card);
+  var tblCard = h("div", { className: "card" });
+  tblCard.appendChild(h("div", { className: "card-t" }, "📋 スタッフ一覧（" + state.staff.length + "名）"));
+  var tbl = h("table", { className: "tbl" });
+  var thead = h("tr");
+  ["名前", "店舗", "形態", "平日時給", "休日時給", "交通費", "操作"].forEach(function(t) { thead.appendChild(h("th", null, t)); });
+  tbl.appendChild(thead);
+  state.staff.forEach(function(s) {
+    var tr = h("tr");
+    tr.appendChild(h("td", null, s.name));
+    tr.appendChild(h("td", null, h("span", { className: "badge badge-b" }, s.store)));
+    tr.appendChild(h("td", null, s.type === "hour" ? "時給" : "月給"));
+    tr.appendChild(h("td", null, "¥" + (s.rate || 0)));
+    tr.appendChild(h("td", null, "¥" + (s.rateH || 0)));
+    tr.appendChild(h("td", null, "¥" + (s.transport || 0)));
+    var btns = h("div", { style: { display: "flex", gap: "6px" } });
+    btns.appendChild(h("button", { className: "btn btn-s", onclick: function() { state.editStaff = JSON.parse(JSON.stringify(s)); render(); } }, "編集"));
+    btns.appendChild(h("button", { className: "btn btn-d", onclick: function() { state.confirmDel = s.id; render(); } }, "削除"));
+    tr.appendChild(h("td", null, btns));
+    tbl.appendChild(tr);
+  });
+  tblCard.appendChild(tbl);
+  wrap.appendChild(tblCard);
+  if (state.editStaff) wrap.appendChild(renderEditStaffModal());
+  if (state.confirmDel) wrap.appendChild(renderConfirmDelModal());
+  return wrap;
+}
+
+function renderStoreAdmin() {
+  var wrap = h("div");
+  var card = h("div", { className: "card" });
+  card.appendChild(h("div", { className: "card-t" }, "🏪 店舗管理"));
+  var row = h("div", { className: "form-row" });
+  row.appendChild(h("div", { className: "form-g" }, [h("label", null, "新店舗名"), h("input", { type: "text", value: state.newStoreName, oninput: function(e) { state.newStoreName = e.target.value; } })]));
+  row.appendChild(h("div", { className: "form-g", style: { justifyContent: "flex-end" } }, [h("button", { className: "btn btn-p", onclick: addStore }, "追加")]));
+  card.appendChild(row);
+  state.stores.forEach(function(st, idx) {
+    var sRow = h("div", { style: { display: "flex", alignItems: "center", gap: "12px", padding: "10px 0", borderTop: "1px solid #1e293b" } });
+    if (state.editStoreIdx === idx) {
+      sRow.appendChild(h("input", { type: "text", value: state.editStoreName, style: { flex: "1" }, oninput: function(e) { state.editStoreName = e.target.value; } }));
+      sRow.appendChild(h("button", { className: "btn btn-p", onclick: saveStoreEdit }, "保存"));
+      sRow.appendChild(h("button", { className: "btn btn-s", onclick: function() { state.editStoreIdx = null; render(); } }, "取消"));
+    } else {
+      sRow.appendChild(h("span", { style: { flex: "1", color: "#e2e8f0" } }, st));
+      sRow.appendChild(h("button", { className: "btn btn-s", onclick: function() { state.editStoreIdx = idx; state.editStoreName = st; render(); } }, "編集"));
+      sRow.appendChild(h("button", { className: "btn btn-d", onclick: function() { deleteStore(idx); } }, "削除"));
+    }
+    card.appendChild(sRow);
+  });
+  wrap.appendChild(card);
+  return wrap;
+}
+
+function renderRecordsAdmin() {
+  var wrap = h("div");
+  var card = h("div", { className: "card" });
+  card.appendChild(h("div", { className: "card-t" }, "📝 打刻修正"));
+  var row = h("div", { className: "form-row" });
+  var staffSel = h("select", { onchange: function(e) { state.editRecStaff = e.target.value; render(); } });
+  staffSel.appendChild(h("option", { value: "" }, "-- スタッフ選択 --"));
+  state.staff.forEach(function(s) { var o = h("option", { value: s.id }, s.name + "（" + s.store + "）"); if (s.id === state.editRecStaff) o.selected = true; staffSel.appendChild(o); });
+  row.appendChild(h("div", { className: "form-g" }, [h("label", null, "スタッフ"), staffSel]));
+  row.appendChild(h("div", { className: "form-g" }, [h("label", null, "日付"), h("input", { type: "text", value: state.editRecDate || toK(now()), oninput: function(e) { state.editRecDate = e.target.value; render(); } })]));
+  row.appendChild(h("div", { className: "form-g", style: { justifyContent: "flex-end" } }, [h("button", { className: "btn btn-p", onclick: function() { if (!state.editRecStaff) { flash("スタッフを選択してください", "err"); return; } state.editRec = { staffId: state.editRecStaff, date: state.editRecDate || toK(now()), clockIn: null, clockOut: null, breakStart: null, breakEnd: null, _isNew: true }; render(); } }, "+ 手動追加")]));
+  card.appendChild(row);
+  if (state.editRecStaff) {
+    var dateK = state.editRecDate || toK(now());
+    var recs = state.records.filter(function(r) { return r.staffId === state.editRecStaff && r.date === dateK; });
+    if (recs.length === 0) {
+      card.appendChild(h("div", { style: { padding: "20px", textAlign: "center", color: "#475569" } }, "この日の打刻記録はありません"));
+    } else {
+      var tbl = h("table", { className: "tbl" });
+      var thead = h("tr");
+      ["出勤", "退勤", "休憩入", "休憩戻", "操作"].forEach(function(t) { thead.appendChild(h("th", null, t)); });
+      tbl.appendChild(thead);
+      recs.forEach(function(r) {
+        var tr = h("tr");
+        tr.appendChild(h("td", null, fmt(r.clockIn)));
+        tr.appendChild(h("td", null, fmt(r.clockOut)));
+        tr.appendChild(h("td", null, fmt(r.breakStart)));
+        tr.appendChild(h("td", null, fmt(r.breakEnd)));
+        tr.appendChild(h("td", null, h("button", { className: "btn btn-s", onclick: function() { state.editRec = JSON.parse(JSON.stringify(r)); state.editRec._isNew = false; state.editRec._origClockIn = r.clockIn; render(); } }, "編集")));
+        tbl.appendChild(tr);
+      });
+      card.appendChild(tbl);
+    }
+  }
+  wrap.appendChild(card);
+  if (state.editRec) wrap.appendChild(renderEditRecModal());
+  return wrap;
+}
+
+function renderEditRecModal() {
+  var bg = h("div", { className: "modal-bg", onclick: function(e) { if (e.target === bg) { state.editRec = null; render(); } } });
+  var modal = h("div", { className: "modal modal-lg" });
+  modal.appendChild(h("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px" } }, [
+    h("div", { className: "modal-title" }, (state.editRec._isNew ? "手動打刻追加" : "打刻修正")),
+    h("button", { className: "close-x", onclick: function() { state.editRec = null; render(); } }, "✕")
+  ]));
+  var fields = ["clockIn", "clockOut", "breakStart", "breakEnd"];
+  var labels = { clockIn: "出勤", clockOut: "退勤", breakStart: "休憩入", breakEnd: "休憩戻" };
+  var row = h("div", { className: "form-row" });
+  fields.forEach(function(f) {
+    var val = state.editRec[f] ? fmt(state.editRec[f]) : "";
+    row.appendChild(h("div", { className: "form-g" }, [
+      h("label", null, labels[f]),
+      h("input", { type: "time", value: val.replace("--:--", ""), oninput: (function(field) { return function(e) {
+        var val = e.target.value;
+        if (!val) { state.editRec[field] = null; return; }
+        state.editRec[field] = new Date((state.editRec.date || toK(now())) + "T" + val + ":00").toISOString();
+      }; })(f) })
+    ]));
+  });
+  modal.appendChild(row);
+  var btnRow = h("div", { style: { display: "flex", gap: "12px", marginTop: "20px" } });
+  btnRow.appendChild(h("button", { className: "modal-cancel", onclick: function() { state.editRec = null; render(); } }, "キャンセル"));
+  btnRow.appendChild(h("button", { className: "modal-save", onclick: saveEdit }, "保存"));
+  modal.appendChild(btnRow);
+  bg.appendChild(modal);
+  return bg;
+}
+
+function renderEditStaffModal() {
+  var es = state.editStaff;
+  var bg = h("div", { className: "modal-bg", onclick: function(e) { if (e.target === bg) { state.editStaff = null; render(); } } });
+  var modal = h("div", { className: "modal modal-lg" });
+  modal.appendChild(h("div", { className: "modal-title" }, "スタッフ編集: " + es.name));
+  var row1 = h("div", { className: "form-row" });
+  row1.appendChild(h("div", { className: "form-g" }, [h("label", null, "名前"), h("input", { type: "text", value: es.name, oninput: function(e) { state.editStaff.name = e.target.value; } })]));
+  var sel = h("select", { onchange: function(e) { state.editStaff.store = e.target.value; } });
+  state.stores.forEach(function(s) { var o = h("option", { value: s }, s); if (s === es.store) o.selected = true; sel.appendChild(o); });
+  row1.appendChild(h("div", { className: "form-g" }, [h("label", null, "店舗"), sel]));
+  modal.appendChild(row1);
+  var row2 = h("div", { className: "form-row" });
+  row2.appendChild(h("div", { className: "form-g" }, [h("label", null, "平日時給"), h("input", { type: "number", value: es.rate, oninput: function(e) { state.editStaff.rate = parseInt(e.target.value) || 0; } })]));
+  row2.appendChild(h("div", { className: "form-g" }, [h("label", null, "休日時給"), h("input", { type: "number", value: es.rateH, oninput: function(e) { state.editStaff.rateH = parseInt(e.target.value) || 0; } })]));
+  row2.appendChild(h("div", { className: "form-g" }, [h("label", null, "交通費"), h("input", { type: "number", value: es.transport, oninput: function(e) { state.editStaff.transport = parseInt(e.target.value) || 0; } })]));
+  modal.appendChild(row2);
+  var btnRow = h("div", { style: { display: "flex", gap: "12px", marginTop: "20px" } });
+  btnRow.appendChild(h("button", { className: "modal-cancel", onclick: function() { state.editStaff = null; render(); } }, "キャンセル"));
+  btnRow.appendChild(h("button", { className: "modal-save", onclick: saveStaffEditFn }, "保存"));
+  modal.appendChild(btnRow);
+  bg.appendChild(modal);
+  return bg;
+}
+
+function renderConfirmDelModal() {
+  var s = state.staff.find(function(x) { return x.id === state.confirmDel; });
+  var bg = h("div", { className: "modal-bg" });
+  var modal = h("div", { className: "modal" });
+  modal.appendChild(h("div", { className: "modal-title" }, "削除確認"));
+  modal.appendChild(h("div", { style: { color: "#94a3b8", marginBottom: "20px" } }, (s ? s.name : "") + "さんを削除しますか？打刻記録も全て削除されます。"));
+  var btnRow = h("div", { style: { display: "flex", gap: "12px" } });
+  btnRow.appendChild(h("button", { className: "modal-cancel", onclick: function() { state.confirmDel = null; render(); } }, "キャンセル"));
+  btnRow.appendChild(h("button", { className: "modal-del", onclick: confirmDeleteFn }, "削除する"));
+  modal.appendChild(btnRow);
+  bg.appendChild(modal);
+  return bg;
+}
+
+function renderPinModal() {
+  var bg = h("div", { className: "modal-bg" });
+  var modal = h("div", { className: "modal" });
+  modal.appendChild(h("div", { className: "modal-title", style: { textAlign: "center" } }, "🔒 管理者PIN"));
+  var dots = h("div", { style: { display: "flex", justifyContent: "center", gap: "8px", marginBottom: "20px" } });
+  for (var i = 0; i < 4; i++) {
+    dots.appendChild(h("div", { className: "pin-dot", style: { borderColor: i < state.pin.length ? "#0ea5e9" : "#334155" } }, i < state.pin.length ? "●" : ""));
+  }
+  modal.appendChild(dots);
+  var pad = h("div", { className: "pin-pad" });
+  [1,2,3,4,5,6,7,8,9,"",0,"⌫"].forEach(function(k) {
+    if (k === "") { pad.appendChild(h("div")); return; }
+    pad.appendChild(h("button", { className: "pin-key", onclick: function() {
+      if (k === "⌫") { state.pin = state.pin.slice(0, -1); render(); return; }
+      if (state.pin.length >= 4) return;
+      state.pin += String(k);
+      if (state.pin.length === 4) {
+        if (state.pin === ADMIN_PIN) { state.view = "admin"; state.showPin = false; state.pin = ""; }
+        else { flash("PINが違います", "err"); state.pin = ""; }
+      }
+      render();
+    } }, String(k)));
+  });
+  modal.appendChild(pad);
+  modal.appendChild(h("div", { style: { textAlign: "center" } }, [
+    h("button", { className: "pin-cancel", onclick: function() { state.showPin = false; state.pin = ""; render(); } }, "キャンセル")
+  ]));
+  bg.appendChild(modal);
+  return bg;
+}
+
+function renderCalModal() {
+  var bg = h("div", { className: "modal-bg", onclick: function(e) { if (e.target === bg) { state.showCal = false; render(); } } });
+  var modal = h("div", { className: "modal modal-lg" });
+  var sn = state.staff.find(function(x) { return x.id === state.sel; });
+  if (!sn) { state.showCal = false; return h("div"); }
+  var parts = state.month.split("-");
+  var yr = parseInt(parts[0]), mo = parseInt(parts[1]);
+  modal.appendChild(h("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "10px" } }, [
+    h("div", { className: "modal-title" }, "📅 " + sn.name + "さんの勤怠"),
+    h("button", { className: "close-x", onclick: function() { state.showCal = false; render(); } }, "✕")
+  ]));
+  var nav = h("div", { className: "cal-nav" });
+  nav.appendChild(h("button", { className: "cal-arrow", onclick: function() { mo--; if (mo < 1) { mo = 12; yr--; } state.month = yr + "-" + String(mo).padStart(2, "0"); render(); } }, "◀"));
+  nav.appendChild(h("div", { className: "cal-month" }, yr + "年 " + mo + "月"));
+  nav.appendChild(h("button", { className: "cal-arrow", onclick: function() { mo++; if (mo > 12) { mo = 1; yr++; } state.month = yr + "-" + String(mo).padStart(2, "0"); render(); } }, "▶"));
+  nav.appendChild(h("button", { className: "today-btn", onclick: function() { state.month = toK(now()).substring(0, 7); render(); } }, "今月"));
+  modal.appendChild(nav);
+  var moRecs = state.records.filter(function(r) { return r.staffId === sn.id && r.date.substring(0, 7) === state.month; });
+  var totalWork = 0, totalBrk = 0, days = 0;
+  moRecs.forEach(function(r) { if (r.clockIn && r.clockOut) { totalWork += diffMin(r.clockIn, r.clockOut); totalBrk += diffMin(r.breakStart, r.breakEnd); days++; } });
+  var net = totalWork - totalBrk;
+  var isWeekend = function(dateStr) { var d = new Date(dateStr); var day = d.getDay(); return day === 0 || day === 6; };
+  var salary = 0, transportTotal = 0;
+  moRecs.forEach(function(r) { if (r.clockIn && r.clockOut) { var w = diffMin(r.clockIn, r.clockOut) - diffMin(r.breakStart, r.breakEnd); var rate = isWeekend(r.date) ? (sn.rateH || sn.rate || 0) : (sn.rate || 0); salary += Math.round(w / 60 * rate); transportTotal += (sn.transport || 0); } });
+  var summary = h("div", { className: "cal-summary" });
+  summary.appendChild(h("span", null, "出勤日数: " + days + "日"));
+  summary.appendChild(h("span", null, "総実働: " + Math.floor(net / 60) + "h " + (net % 60) + "m"));
+  summary.appendChild(h("span", null, "総休憩: " + totalBrk + "分"));
+  modal.appendChild(summary);
+  var salRow = h("div", { className: "cal-salary" });
+  salRow.appendChild(h("div", { className: "sal-card" }, [h("div", { className: "sal-v" }, "¥" + salary.toLocaleString()), h("div", { className: "sal-l" }, "給与")]));
+  salRow.appendChild(h("div", { className: "sal-card" }, [h("div", { className: "sal-v" }, "¥" + transportTotal.toLocaleString()), h("div", { className: "sal-l" }, "交通費")]));
+  salRow.appendChild(h("div", { className: "sal-card" }, [h("div", { className: "sal-v" }, "¥" + (salary + transportTotal).toLocaleString()), h("div", { className: "sal-l" }, "合計")]));
+  modal.appendChild(salRow);
+  var tbl = h("table", { className: "cal" });
+  var thead = h("tr");
+  ["日", "曜", "出勤", "退勤", "休憩", "実働"].forEach(function(t) { thead.appendChild(h("th", null, t)); });
+  tbl.appendChild(thead);
+  var daysInMonth = new Date(yr, mo, 0).getDate();
+  for (var d = 1; d <= daysInMonth; d++) {
+    var dateStr = yr + "-" + String(mo).padStart(2, "0") + "-" + String(d).padStart(2, "0");
+    var dt = new Date(dateStr);
+    var dayOfWeek = ["日", "月", "火", "水", "木", "金", "土"][dt.getDay()];
+    var dayRecs = moRecs.filter(function(r) { return r.date === dateStr; });
+    var isToday = dateStr === toK(now());
+    if (dayRecs.length === 0) {
+      var tr = h("tr");
+      tr.appendChild(h("td", { className: isToday ? "cal-today" : "" }, d));
+      tr.appendChild(h("td", { className: dt.getDay() === 0 ? "cal-sun" : dt.getDay() === 6 ? "cal-sat" : "" }, dayOfWeek));
+      tr.appendChild(h("td", null, "-")); tr.appendChild(h("td", null, "-")); tr.appendChild(h("td", null, "-")); tr.appendChild(h("td", null, "-"));
+      tbl.appendChild(tr);
+    } else {
+      dayRecs.forEach(function(r, ri) {
+        var tr = h("tr");
+        tr.appendChild(h("td", { className: isToday ? "cal-today" : "" }, ri === 0 ? d : ""));
+        tr.appendChild(h("td", { className: dt.getDay() === 0 ? "cal-sun" : dt.getDay() === 6 ? "cal-sat" : "" }, ri === 0 ? dayOfWeek : ""));
+        tr.appendChild(h("td", null, fmt(r.clockIn)));
+        tr.appendChild(h("td", null, fmt(r.clockOut)));
+        var brk = diffMin(r.breakStart, r.breakEnd);
+        tr.appendChild(h("td", null, brk > 0 ? brk + "分" : "-"));
+        var work = (r.clockIn && r.clockOut) ? diffMin(r.clockIn, r.clockOut) - brk : 0;
+        tr.appendChild(h("td", null, work > 0 ? Math.floor(work / 60) + "h" + (work % 60) + "m" : "-"));
+        tbl.appendChild(tr);
+      });
+    }
+  }
+  modal.appendChild(tbl);
+  modal.appendChild(h("div", { style: { textAlign: "center" } }, [
+    h("button", { className: "btn btn-p", onclick: function() { exportCSV(sn, moRecs, yr, mo); } }, "📊 CSV出力"),
+    h("button", { className: "btn btn-s", style: { marginLeft: "12px" }, onclick: function() { state.showCal = false; render(); } }, "閉じる")
+  ]));
+  bg.appendChild(modal);
+  return bg;
+}
+
+function renderToast() {
+  var t = state.toast;
+  return h("div", { className: "toast toast-" + t.type }, [
+    h("div", { className: "toast-ic" }, t.type === "ok" ? "✓" : "!"),
+    h("span", null, t.msg)
+  ]);
+}
+
+// ═══════════ ACTIONS ═══════════
+function addStaffFn() {
+  if (!state.newName.trim()) { flash("名前を入力してください", "err"); return; }
+  if (state.stores.length === 0) { flash("先に店舗を追加してください", "err"); return; }
+  if (!state.newStore || state.stores.indexOf(state.newStore) === -1) state.newStore = state.stores[0];
+  var newStaff = { id: "s" + Date.now(), name: state.newName.trim(), store: state.newStore, type: state.newType, rate: parseInt(state.newRate) || 0, rateH: parseInt(state.newRateH) || 0, transport: parseInt(state.newTransport) || 0 };
+  state.staff.push(newStaff);
+  apiPost({ action: "addStaff", staff: newStaff });
+  flash(state.newName.trim() + "さんを追加しました");
+  state.newName = ""; state.newTransport = "0";
+  saveAll(); render();
+}
+
+function saveStaffEditFn() {
+  if (!state.editStaff) return;
+  state.staff = state.staff.map(function(s) { return s.id === state.editStaff.id ? state.editStaff : s; });
+  apiPost({ action: "updateStaff", staff: state.editStaff });
+  state.editStaff = null;
+  flash("スタッフ情報を更新しました");
+  saveAll(); render();
+}
+
+function confirmDeleteFn() {
+  if (!state.confirmDel) return;
+  var s = state.staff.find(function(x) { return x.id === state.confirmDel; });
+  apiPost({ action: "deleteStaff", staffId: state.confirmDel });
+  state.staff = state.staff.filter(function(x) { return x.id !== state.confirmDel; });
+  state.records = state.records.filter(function(x) { return x.staffId !== state.confirmDel; });
+  flash((s ? s.name : "") + "さんを削除しました");
+  state.confirmDel = null;
+  saveAll(); render();
+}
+
+function saveEdit() {
+  if (!state.editRec) return;
+  var rec = state.editRec;
+  var clean = {};
+  Object.keys(rec).forEach(function(k) { if (k !== "_isNew" && k !== "_origClockIn") clean[k] = rec[k]; });
+  if (rec._isNew) {
+    if (!clean.clockIn) { flash("出勤時刻を入力してください", "err"); return; }
+    state.records.push(clean);
+    apiPost({ action: "punch", isNew: true, record: { staffId: clean.staffId, date: clean.date, clockIn: clean.clockIn || "", clockOut: clean.clockOut || "", breakStart: clean.breakStart || "", breakEnd: clean.breakEnd || "", store: clean.store || "" } });
+  } else {
+    var found = false;
+    state.records = state.records.map(function(r) {
+      if (!found && r.staffId === clean.staffId && r.date === clean.date && r.clockIn === rec._origClockIn) { found = true; return clean; }
+      return r;
+    });
+    apiPost({ action: "punch", isNew: false, record: { staffId: clean.staffId, date: clean.date, origClockIn: rec._origClockIn, clockIn: clean.clockIn || "", clockOut: clean.clockOut || "", breakStart: clean.breakStart || "", breakEnd: clean.breakEnd || "" } });
+  }
+  state.editRec = null;
+  flash("打刻を保存しました");
+  saveAll(); render();
+}
+
+function addStore() {
+  if (!state.newStoreName.trim()) return;
+  state.stores.push(state.newStoreName.trim());
+  apiPost({ action: "addStore", storeName: state.newStoreName.trim() });
+  state.newStoreName = "";
+  flash("店舗を追加しました");
+  saveAll(); render();
+}
+
+function saveStoreEdit() {
+  if (state.editStoreIdx === null || !state.editStoreName.trim()) return;
+  var old = state.stores[state.editStoreIdx];
+  var newName = state.editStoreName.trim();
+  state.stores[state.editStoreIdx] = newName;
+  state.staff = state.staff.map(function(s) { return s.store === old ? Object.assign({}, s, { store: newName }) : s; });
+  apiPost({ action: "updateStore", oldName: old, newName: newName });
+  state.editStoreIdx = null;
+  flash("店舗名を変更しました");
+  saveAll(); render();
+}
+
+function deleteStore(idx) {
+  var name = state.stores[idx];
+  if (state.staff.some(function(s) { return s.store === name; })) { flash("この店舗にスタッフがいるため削除できません", "err"); return; }
+  state.stores = state.stores.filter(function(_, i) { return i !== idx; });
+  apiPost({ action: "deleteStore", storeName: name });
+  flash("店舗を削除しました");
+  saveAll(); render();
+}
+
+function exportCSV(sn, moRecs, yr, mo) {
+  var BOM = "\uFEFF";
+  var header = "日付,曜日,出勤,退勤,休憩(分),実働(分),備考\n";
+  var rows = [];
+  var daysInMonth = new Date(yr, mo, 0).getDate();
+  for (var d = 1; d <= daysInMonth; d++) {
+    var dateStr = yr + "-" + String(mo).padStart(2, "0") + "-" + String(d).padStart(2, "0");
+    var dt = new Date(dateStr);
+    var dayOfWeek = ["日","月","火","水","木","金","土"][dt.getDay()];
+    var dayRecs = moRecs.filter(function(r) { return r.date === dateStr; });
+    if (dayRecs.length === 0) {
+      rows.push(dateStr + "," + dayOfWeek + ",,,,," );
+    } else {
+      dayRecs.forEach(function(r) {
+        var brk = diffMin(r.breakStart, r.breakEnd);
+        var work = (r.clockIn && r.clockOut) ? diffMin(r.clockIn, r.clockOut) - brk : 0;
+        rows.push(dateStr + "," + dayOfWeek + "," + fmt(r.clockIn) + "," + fmt(r.clockOut) + "," + brk + "," + work + ",");
+      });
+    }
+  }
+  var b = new Blob([BOM + header + rows.join("\n")], { type: "text/csv;charset=utf-8;" });
+  var url = URL.createObjectURL(b);
+  var a = document.createElement("a"); a.href = url; a.download = "toichi_勤怠_" + sn.name + "_" + state.month + ".csv";
+  if (typeof a.download !== "undefined") { document.body.appendChild(a); a.click(); document.body.removeChild(a); }
+  else { window.open(url); }
+  setTimeout(function() { URL.revokeObjectURL(url); }, 5000);
+  flash("CSVをダウンロードしました");
+}
+
+// ═══════════ INIT ═══════════
+render();
+setInterval(function() { if (state.view === "clock") render(); }, 1000);
+// 起動時にサーバーから同期
+syncFromServer(false);
+// 定期同期
+setInterval(function() { syncFromServer(false); }, SYNC_INTERVAL);
+</script>
+</body>
+</html>
