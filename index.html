@@ -111,12 +111,22 @@ var state = {
 function saveAll() { save(SK.staff, state.staff); save(SK.records, state.records); save(SK.stores, state.stores); }
 
 // ═══════════ API通信（CORS修正版） ═══════════
+function updateSyncBadge() {
+  var syncLabel = { idle: "", syncing: "同期中…", ok: "同期済", error: "同期エラー" };
+  var syncClass = { idle: "sync-badge", syncing: "sync-badge sync-ing", ok: "sync-badge sync-ok", error: "sync-badge sync-err" };
+  var badge = document.querySelector(".sync-badge");
+  if (badge) {
+    badge.className = syncClass[state.syncStatus] || "sync-badge";
+    badge.textContent = syncLabel[state.syncStatus] || "";
+    badge.style.display = state.syncStatus === "idle" ? "none" : "";
+  }
+}
 function apiGet(action, callback) {
-  state.syncStatus = "syncing"; render();
+  state.syncStatus = "syncing"; updateSyncBadge();
   fetch(GAS_URL + "?action=" + action, { redirect: "follow" })
     .then(function(r) { return r.json(); })
     .then(function(data) { state.syncStatus = "ok"; if (callback) callback(data); })
-    .catch(function(e) { console.warn("API GET error:", e); state.syncStatus = "error"; render(); });
+    .catch(function(e) { console.warn("API GET error:", e); state.syncStatus = "error"; updateSyncBadge(); });
 }
 function apiPost(body, callback) {
   fetch(GAS_URL, { method: "POST", headers: { "Content-Type": "text/plain" }, body: JSON.stringify(body), redirect: "follow" })
@@ -126,7 +136,7 @@ function apiPost(body, callback) {
 }
 function syncFromServer(showFlashMsg) {
   apiGet("getAll", function(data) {
-    if (!data.ok) { state.syncStatus = "error"; render(); return; }
+    if (!data.ok) { state.syncStatus = "error"; updateSyncBadge(); return; }
     if (data.stores && data.stores.length > 0) state.stores = data.stores;
     if (data.staff) {
       state.staff = data.staff.map(function(s) {
@@ -226,6 +236,8 @@ function txt(s) { return document.createTextNode(s); }
 function render() {
   var stList = document.querySelector(".st-list");
   var savedScroll = stList ? stList.scrollTop : 0;
+  var adminLayout = document.querySelector(".admin-layout");
+  var savedAdminScroll = adminLayout ? adminLayout.scrollTop : 0;
   var root = document.getElementById("root");
   root.innerHTML = "";
   var container = h("div", { className: "root" });
@@ -238,8 +250,13 @@ function render() {
   if (state.showCal && state.sel) container.appendChild(renderCalModal());
   if (state.toast) container.appendChild(renderToast());
   root.appendChild(container);
-  var newStList = document.querySelector(".st-list");
-  if (newStList && savedScroll > 0) newStList.scrollTop = savedScroll;
+  // スクロール位置復元（RAF で確実にレイアウト後に実行）
+  requestAnimationFrame(function() {
+    var newStList = document.querySelector(".st-list");
+    if (newStList && savedScroll > 0) newStList.scrollTop = savedScroll;
+    var newAdminLayout = document.querySelector(".admin-layout");
+    if (newAdminLayout && savedAdminScroll > 0) newAdminLayout.scrollTop = savedAdminScroll;
+  });
 }
 
 function renderHeader() {
@@ -259,7 +276,9 @@ function renderHeader() {
     return h("button", { className: "nav-btn" + (state.view === t.k ? " active" : ""), onclick: function() { if (t.k === "admin" && state.view !== "admin") { state.showPin = true; state.pin = ""; render(); } else { state.view = t.k; render(); } } }, t.i + " " + t.l);
   });
   var hRight = h("div", { className: "h-right" });
-  if (state.syncStatus !== "idle") hRight.appendChild(h("span", { className: syncClass[state.syncStatus] }, syncLabel[state.syncStatus]));
+  var syncEl = h("span", { className: syncClass[state.syncStatus] || "sync-badge" }, syncLabel[state.syncStatus] || "");
+  if (state.syncStatus === "idle") syncEl.style.display = "none";
+  hRight.appendChild(syncEl);
   hRight.appendChild(h("button", { className: "btn btn-s", style: { fontSize: "11px", padding: "6px 12px" }, onclick: function() { syncFromServer(true); } }, "↻ 同期"));
   var nav = h("div", { className: "nav" });
   navBtns.forEach(function(b) { nav.appendChild(b); });
