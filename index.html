@@ -131,7 +131,13 @@ function syncFromServer(showFlashMsg) {
     }
     if (data.records) {
       state.records = data.records.map(function(r) {
-        return { staffId: String(r.staffId), date: String(r.date), clockIn: r.clockIn || null, clockOut: r.clockOut || null, breakStart: r.breakStart || null, breakEnd: r.breakEnd || null, store: r.store || "" };
+        // GASから返る日付がISO形式(UTC)の場合、日本時間のYYYY-MM-DDに正規化
+        var dateStr = String(r.date);
+        if (dateStr.indexOf("T") !== -1) {
+          var d = new Date(dateStr);
+          dateStr = d.getFullYear() + "-" + String(d.getMonth()+1).padStart(2,"0") + "-" + String(d.getDate()).padStart(2,"0");
+        }
+        return { staffId: String(r.staffId), date: dateStr, clockIn: r.clockIn || null, clockOut: r.clockOut || null, breakStart: r.breakStart || null, breakEnd: r.breakEnd || null, store: r.store || "" };
       });
     }
     saveAll();
@@ -767,7 +773,17 @@ function exportCSV(sn, moRecs, yr, mo) {
 
 // ═══════════ INIT ═══════════
 render();
-setInterval(function() { if (state.view === "clock") render(); }, 1000);
+// 時計だけ毎秒更新（DOM全体を再構築しない）
+setInterval(function() {
+  if (state.view !== "clock") return;
+  var n = now();
+  var timeH = String(n.getHours()).padStart(2,"0") + ":" + String(n.getMinutes()).padStart(2,"0");
+  var timeS = String(n.getSeconds()).padStart(2,"0");
+  var bigT = document.querySelector(".big-t");
+  var bigS = document.querySelector(".big-s");
+  if (bigT) bigT.textContent = timeH;
+  if (bigS) bigS.textContent = timeS;
+}, 1000);
 // 起動時にサーバーから同期
 syncFromServer(false);
 // 定期同期
