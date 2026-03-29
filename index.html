@@ -223,6 +223,9 @@ function txt(s) { return document.createTextNode(s); }
 
 // ═══════════ RENDER ═══════════
 function render() {
+  // スクロール位置を保存
+  var stList = document.querySelector(".st-list");
+  var savedScroll = stList ? stList.scrollTop : 0;
   var root = document.getElementById("root");
   root.innerHTML = "";
   var container = h("div", { className: "root" });
@@ -235,6 +238,9 @@ function render() {
   if (state.showCal && state.sel) container.appendChild(renderCalModal());
   if (state.toast) container.appendChild(renderToast());
   root.appendChild(container);
+  // スクロール位置を復元
+  var newStList = document.querySelector(".st-list");
+  if (newStList && savedScroll > 0) newStList.scrollTop = savedScroll;
 }
 
 function renderHeader() {
