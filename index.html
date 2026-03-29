@@ -70,7 +70,7 @@ input[type=text],input[type=number],input[type=time],select{padding:10px 14px;bo
 // ═══════════════════════════════════════════════════════════════
 
 var GAS_URL = "https://script.google.com/macros/s/AKfycbwPcLeqrT4ecdYZckSCASbq-WdjxHQPeQ_w70cB4qEM4fIY-fvUUAqYXNljRIzyJoNqYw/exec";
-var SYNC_INTERVAL = 30000;
+var SYNC_INTERVAL = 60000;
 var DEFAULT_STORES = ["橿原本店", "北堀江店", "心斎橋toichibowl"];
 var ADMIN_PIN = "0910";
 var SK = { staff: "toichi_s5", records: "toichi_r5", stores: "toichi_stores5" };
@@ -87,6 +87,7 @@ var state = {
   newName: "", newStore: "", newType: "hour", newRate: "", newRateH: "", newTransport: "0",
   editStaff: null, confirmDel: null, editStoreIdx: null, editStoreName: "",
   newStoreName: "", editRec: null,
+  editRecStaff: "", editRecDate: "",
   syncStatus: "idle" // idle, syncing, ok, error
 };
 
@@ -271,12 +272,26 @@ function renderClockView() {
   var list = h("div", { className: "st-list" });
   var filtered = state.staff.filter(function(s) { return state.storeFilter === "all" || s.store === state.storeFilter; });
   filtered.forEach(function(s, i) {
+    // 今日のステータスを判定
+    var todayK = toK(now());
+    var dayRecs = state.records.filter(function(r) { return r.staffId === s.id && r.date === todayK; });
+    var latest = dayRecs.length > 0 ? dayRecs[dayRecs.length - 1] : null;
+    var status = "";
+    var statusColor = "";
+    if (latest && latest.clockIn && !latest.clockOut) {
+      if (latest.breakStart && !latest.breakEnd) { status = "休憩中"; statusColor = "#8b5cf6"; }
+      else { status = "出勤中"; statusColor = "#22c55e"; }
+    }
+    var infoChildren = [
+      h("div", { className: "st-nm" }, [
+        txt(s.name),
+        status ? h("span", { style: { marginLeft: "8px", padding: "2px 8px", borderRadius: "4px", fontSize: "10px", fontWeight: "700", color: "#fff", background: statusColor } }, status) : null
+      ].filter(Boolean)),
+      h("div", { className: "st-inf" }, s.store + " / " + (s.type === "hour" ? "時給" : "月給"))
+    ];
     var card = h("div", { className: "st-card" + (state.sel === s.id ? " sel" : ""), onclick: function() { state.sel = s.id; render(); } }, [
       h("div", { className: "st-av", style: { background: avColor(i) } }, s.name.charAt(0)),
-      h("div", null, [
-        h("div", { className: "st-nm" }, s.name),
-        h("div", { className: "st-inf" }, s.store + " / " + (s.type === "hour" ? "時給" : "月給"))
-      ])
+      h("div", null, infoChildren)
     ]);
     list.appendChild(card);
   });
