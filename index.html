@@ -633,11 +633,14 @@ function renderCalModal() {
   summary.appendChild(h("span", null, "総実働: " + Math.floor(net / 60) + "h " + (net % 60) + "m"));
   summary.appendChild(h("span", null, "総休憩: " + totalBrk + "分"));
   modal.appendChild(summary);
-  var salRow = h("div", { className: "cal-salary" });
-  salRow.appendChild(h("div", { className: "sal-card" }, [h("div", { className: "sal-v" }, "¥" + salary.toLocaleString()), h("div", { className: "sal-l" }, "給与")]));
-  salRow.appendChild(h("div", { className: "sal-card" }, [h("div", { className: "sal-v" }, "¥" + transportTotal.toLocaleString()), h("div", { className: "sal-l" }, "交通費")]));
-  salRow.appendChild(h("div", { className: "sal-card" }, [h("div", { className: "sal-v" }, "¥" + (salary + transportTotal).toLocaleString()), h("div", { className: "sal-l" }, "合計")]));
-  modal.appendChild(salRow);
+  // 給与情報は管理画面からのみ表示
+  if (state.view === "admin") {
+    var salRow = h("div", { className: "cal-salary" });
+    salRow.appendChild(h("div", { className: "sal-card" }, [h("div", { className: "sal-v" }, "¥" + salary.toLocaleString()), h("div", { className: "sal-l" }, "給与")]));
+    salRow.appendChild(h("div", { className: "sal-card" }, [h("div", { className: "sal-v" }, "¥" + transportTotal.toLocaleString()), h("div", { className: "sal-l" }, "交通費")]));
+    salRow.appendChild(h("div", { className: "sal-card" }, [h("div", { className: "sal-v" }, "¥" + (salary + transportTotal).toLocaleString()), h("div", { className: "sal-l" }, "合計")]));
+    modal.appendChild(salRow);
+  }
   var tbl = h("table", { className: "cal" });
   var thead = h("tr");
   ["日", "曜", "出勤", "退勤", "休憩", "実働"].forEach(function(t) { thead.appendChild(h("th", null, t)); });
