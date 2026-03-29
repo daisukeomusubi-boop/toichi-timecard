@@ -60,21 +60,26 @@ input[type=text],input[type=number],input[type=time],select{padding:10px 14px;bo
 .modal-cancel{flex:1;padding:12px;border-radius:10px;border:1px solid #1e293b;background:#1e293b;color:#94a3b8;font-weight:600;}.modal-save{flex:1;padding:12px;border-radius:10px;border:none;background:linear-gradient(135deg,#0ea5e9,#06b6d4);color:#fff;font-weight:700;box-shadow:0 4px 20px #0ea5e930;}.modal-save:hover{filter:brightness(1.1);}.modal-del{flex:1;padding:12px;border-radius:10px;border:none;background:#dc2626;color:#fff;font-weight:700;}
 .pin-dot{width:48px;height:56px;border-radius:10px;background:#1e293b;border:2px solid;display:flex;align-items:center;justify-content:center;font-size:24px;font-weight:700;color:#e2e8f0;font-family:'Courier New',monospace;transition:all .15s;}.pin-pad{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;max-width:240px;margin:0 auto;}.pin-key{padding:14px 0;border-radius:10px;border:1px solid #334155;background:#0f172a;color:#e2e8f0;font-size:20px;font-weight:600;font-family:'DM Sans',sans-serif;transition:all .1s;}.pin-key:hover{background:#1e293b;}.pin-cancel{margin-top:16px;padding:8px 24px;border-radius:8px;border:1px solid #334155;background:transparent;color:#64748b;font-size:13px;cursor:pointer;}
 .toast{position:fixed;bottom:30px;left:50%;transform:translateX(-50%);color:#fff;padding:14px 28px;border-radius:12px;font-size:14px;font-weight:600;z-index:999;display:flex;align-items:center;gap:10px;box-shadow:0 8px 30px rgba(0,0,0,.4);animation:toastIn .3s ease;}.toast-ok{background:linear-gradient(135deg,#0ea5e9,#06b6d4);}.toast-err{background:#dc2626;}.toast-ic{width:24px;height:24px;border-radius:50%;background:rgba(255,255,255,.2);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;}
+
+/* ===== 新規追加: 管理画面の月次集計・カレンダー用スタイル ===== */
+.cal-mode-tabs{display:flex;gap:6px;margin-bottom:20px;}.cal-mode{padding:10px 20px;border-radius:8px;border:1px solid #1e293b;background:#0b1120;color:#64748b;font-size:13px;font-weight:500;transition:all .2s;}.cal-mode.active{background:#0ea5e920;color:#22d3ee;border-color:#0ea5e940;}
+.staff-chips{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px;}.chip{padding:8px 16px;border-radius:20px;border:1px solid #1e293b;background:#0b1120;color:#94a3b8;font-size:12px;font-weight:500;transition:all .2s;}.chip.active{background:#0ea5e920;color:#22d3ee;border-color:#0ea5e940;}
+.month-sel{padding:8px 14px;border-radius:8px;border:1px solid #1e293b;background:#0b1120;color:#e2e8f0;font-size:14px;font-family:inherit;}
+.summary-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:12px;margin-bottom:20px;}.summary-item{background:#0f172a;border:1px solid #1e293b;border-radius:10px;padding:12px;text-align:center;}.summary-val{font-size:20px;font-weight:700;color:#22d3ee;font-family:'Courier New',monospace;}.summary-lbl{font-size:11px;color:#64748b;margin-top:4px;}
+.store-filter-row{display:flex;gap:6px;margin-bottom:16px;flex-wrap:wrap;}
 </style>
 </head>
 <body>
 <div id="root"></div>
 <script>
 // ═══════════════════════════════════════════════════════════════
-// （株）toichi タイムカード v7 — クラウド版（Googleスプレッドシート連携）
+// （株）toichi タイムカード v8 — クラウド版（管理画面拡張: 月次集計・カレンダー）
 // ═══════════════════════════════════════════════════════════════
-
 var GAS_URL = "https://script.google.com/macros/s/AKfycbwPcLeqrT4ecdYZckSCASbq-WdjxHQPeQ_w70cB4qEM4fIY-fvUUAqYXNljRIzyJoNqYw/exec";
 var SYNC_INTERVAL = 60000;
 var DEFAULT_STORES = ["橿原本店", "北堀江店", "心斎橋toichibowl"];
 var ADMIN_PIN = "0910";
 var SK = { staff: "toichi_s5", records: "toichi_r5", stores: "toichi_stores5" };
-
 function load(k, fb) { try { var d = localStorage.getItem(k); return d ? JSON.parse(d) : fb; } catch(e) { return fb; } }
 function save(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch(e) {} }
 
@@ -88,7 +93,13 @@ var state = {
   editStaff: null, confirmDel: null, editStoreIdx: null, editStoreName: "",
   newStoreName: "", editRec: null,
   editRecStaff: "", editRecDate: "",
-  syncStatus: "idle" // idle, syncing, ok, error
+  syncStatus: "idle",
+  // 新規: 管理画面用
+  adminMonth: (function() { var d = new Date(); return d.getFullYear() + "-" + String(d.getMonth()+1).padStart(2,"0"); })(),
+  adminStoreFilter: "all",
+  calMode: "all", // "all" or "personal"
+  calStaff: null,
+  calDate: null // 全スタッフ日別で選択された日付
 };
 
 function saveAll() { save(SK.staff, state.staff); save(SK.records, state.records); save(SK.stores, state.stores); }
@@ -98,29 +109,15 @@ function apiGet(action, callback) {
   state.syncStatus = "syncing"; render();
   fetch(GAS_URL + "?action=" + action, { redirect: "follow" })
     .then(function(r) { return r.json(); })
-    .then(function(data) {
-      state.syncStatus = "ok";
-      if (callback) callback(data);
-    })
-    .catch(function(e) {
-      console.warn("API GET error:", e);
-      state.syncStatus = "error";
-      render();
-    });
+    .then(function(data) { state.syncStatus = "ok"; if (callback) callback(data); })
+    .catch(function(e) { console.warn("API GET error:", e); state.syncStatus = "error"; render(); });
 }
-
 function apiPost(body, callback) {
-  fetch(GAS_URL, {
-    method: "POST",
-    headers: { "Content-Type": "text/plain" },
-    body: JSON.stringify(body),
-    redirect: "follow"
-  })
+  fetch(GAS_URL, { method: "POST", headers: { "Content-Type": "text/plain" }, body: JSON.stringify(body), redirect: "follow" })
     .then(function(r) { return r.json(); })
     .then(function(data) { if (callback) callback(data); })
     .catch(function(e) { console.warn("API POST error:", e); });
 }
-
 function syncFromServer(showFlashMsg) {
   apiGet("getAll", function(data) {
     if (!data.ok) { state.syncStatus = "error"; render(); return; }
@@ -132,13 +129,8 @@ function syncFromServer(showFlashMsg) {
     }
     if (data.records) {
       state.records = data.records.map(function(r) {
-        // GASから返る日付がISO形式(UTC)の場合、日本時間のYYYY-MM-DDに正規化
         var dateStr = String(r.date);
-        if (dateStr.indexOf("T") !== -1) {
-          var d = new Date(dateStr);
-          dateStr = d.getFullYear() + "-" + String(d.getMonth()+1).padStart(2,"0") + "-" + String(d.getDate()).padStart(2,"0");
-        }
-        // 空文字・undefined → null に統一（有効なISO文字列のみ保持）
+        if (dateStr.indexOf("T") !== -1) { var d = new Date(dateStr); dateStr = d.getFullYear() + "-" + String(d.getMonth()+1).padStart(2,"0") + "-" + String(d.getDate()).padStart(2,"0"); }
         function normalizeTime(v) { var s = String(v || ""); return (s && s.length > 4) ? s : null; }
         return { staffId: String(r.staffId), date: dateStr, clockIn: normalizeTime(r.clockIn), clockOut: normalizeTime(r.clockOut), breakStart: normalizeTime(r.breakStart), breakEnd: normalizeTime(r.breakEnd), store: String(r.store || "") };
       });
@@ -154,14 +146,11 @@ function now() { return new Date(); }
 function toK(d) { return d.getFullYear() + "-" + String(d.getMonth()+1).padStart(2,"0") + "-" + String(d.getDate()).padStart(2,"0"); }
 function fmt(iso) { if (!iso) return "--:--"; var d = new Date(iso); return String(d.getHours()).padStart(2,"0") + ":" + String(d.getMinutes()).padStart(2,"0"); }
 function diffMin(a, b) { if (!a || !b) return 0; return Math.round((new Date(b) - new Date(a)) / 60000); }
-function flash(msg, type) {
-  if (state.toastTimer) clearTimeout(state.toastTimer);
-  state.toast = { msg: msg, type: type || "ok" };
-  render();
-  state.toastTimer = setTimeout(function() { state.toast = null; render(); }, 2500);
-}
+function flash(msg, type) { if (state.toastTimer) clearTimeout(state.toastTimer); state.toast = { msg: msg, type: type || "ok" }; render(); state.toastTimer = setTimeout(function() { state.toast = null; render(); }, 2500); }
 var avColors = ["#0ea5e9","#8b5cf6","#f59e0b","#10b981","#ec4899","#06b6d4","#f97316","#6366f1"];
 function avColor(i) { return avColors[i % avColors.length]; }
+function isWeekend(dateStr) { var d = new Date(dateStr); var day = d.getDay(); return day === 0 || day === 6; }
+function hm(mins) { if (mins <= 0) return "0h00m"; return Math.floor(mins / 60) + "h" + String(mins % 60).padStart(2,"0") + "m"; }
 
 // ═══════════ PUNCH ═══════════
 function punch(sid, act) {
@@ -185,13 +174,8 @@ function punch(sid, act) {
     }
     if (li === -1) return;
     state.records[li][act] = ts;
-    // 現在のレコードの全フィールドをそのまま送信（nullはそのまま）
     var cur = state.records[li];
-    apiPost({ action: "punch", isNew: false, record: {
-      staffId: sid, date: todayK, origClockIn: latest.clockIn,
-      clockIn: cur.clockIn, clockOut: cur.clockOut,
-      breakStart: cur.breakStart, breakEnd: cur.breakEnd
-    }});
+    apiPost({ action: "punch", isNew: false, record: { staffId: sid, date: todayK, origClockIn: latest.clockIn, clockIn: cur.clockIn, clockOut: cur.clockOut, breakStart: cur.breakStart, breakEnd: cur.breakEnd }});
   }
   saveAll();
   var lb = { clockIn: "出勤", clockOut: "退勤", breakStart: "休憩入り", breakEnd: "休憩戻り" };
@@ -223,7 +207,6 @@ function txt(s) { return document.createTextNode(s); }
 
 // ═══════════ RENDER ═══════════
 function render() {
-  // スクロール位置を保存
   var stList = document.querySelector(".st-list");
   var savedScroll = stList ? stList.scrollTop : 0;
   var root = document.getElementById("root");
@@ -238,7 +221,6 @@ function render() {
   if (state.showCal && state.sel) container.appendChild(renderCalModal());
   if (state.toast) container.appendChild(renderToast());
   root.appendChild(container);
-  // スクロール位置を復元
   var newStList = document.querySelector(".st-list");
   if (newStList && savedScroll > 0) newStList.scrollTop = savedScroll;
 }
@@ -248,7 +230,7 @@ function renderHeader() {
     h("div", { className: "logo" }, "t"),
     h("div", null, [
       h("div", { className: "brand" }, "（株）toichi　タイムカード"),
-      h("div", { className: "brand-sub" }, "トイチパンケーキ 勤怠管理システム v7")
+      h("div", { className: "brand-sub" }, "トイチパンケーキ 勤怠管理システム v8")
     ])
   ]);
   var syncLabel = { idle: "", syncing: "同期中…", ok: "同期済", error: "同期エラー" };
@@ -260,25 +242,21 @@ function renderHeader() {
     return h("button", { className: "nav-btn" + (state.view === t.k ? " active" : ""), onclick: function() { if (t.k === "admin" && state.view !== "admin") { state.showPin = true; state.pin = ""; render(); } else { state.view = t.k; render(); } } }, t.i + " " + t.l);
   });
   var hRight = h("div", { className: "h-right" });
-  if (state.syncStatus !== "idle") {
-    hRight.appendChild(h("span", { className: syncClass[state.syncStatus] }, syncLabel[state.syncStatus]));
-  }
+  if (state.syncStatus !== "idle") hRight.appendChild(h("span", { className: syncClass[state.syncStatus] }, syncLabel[state.syncStatus]));
   hRight.appendChild(h("button", { className: "btn btn-s", style: { fontSize: "11px", padding: "6px 12px" }, onclick: function() { syncFromServer(true); } }, "↻ 同期"));
   var nav = h("div", { className: "nav" });
   navBtns.forEach(function(b) { nav.appendChild(b); });
   hRight.appendChild(nav);
-  var header = h("div", { className: "header" }, [hLeft, hRight]);
-  return header;
+  return h("div", { className: "header" }, [hLeft, hRight]);
 }
 
 function renderClockView() {
   var layout = h("div", { className: "clock-layout" });
   var leftPanel = h("div", { className: "left" });
-  var leftHd = h("div", { className: "left-hd" }, [
+  leftPanel.appendChild(h("div", { className: "left-hd" }, [
     h("div", { className: "left-t" }, "スタッフ一覧"),
     h("div", { className: "left-s" }, state.staff.length + "名登録中")
-  ]);
-  leftPanel.appendChild(leftHd);
+  ]));
   var tabs = h("div", { className: "st-tabs" });
   ["all"].concat(state.stores).forEach(function(st) {
     tabs.appendChild(h("button", { className: "st-tab" + (state.storeFilter === st ? " active" : ""), onclick: function() { state.storeFilter = st; render(); } }, st === "all" ? "全店舗" : st));
@@ -287,12 +265,10 @@ function renderClockView() {
   var list = h("div", { className: "st-list" });
   var filtered = state.staff.filter(function(s) { return state.storeFilter === "all" || s.store === state.storeFilter; });
   filtered.forEach(function(s, i) {
-    // 今日のステータスを判定
     var todayK = toK(now());
     var dayRecs = state.records.filter(function(r) { return r.staffId === s.id && r.date === todayK; });
     var latest = dayRecs.length > 0 ? dayRecs[dayRecs.length - 1] : null;
-    var status = "";
-    var statusColor = "";
+    var status = "", statusColor = "";
     if (latest && latest.clockIn && !latest.clockOut) {
       if (latest.breakStart && !latest.breakEnd) { status = "休憩中"; statusColor = "#8b5cf6"; }
       else { status = "出勤中"; statusColor = "#22c55e"; }
@@ -304,11 +280,10 @@ function renderClockView() {
       ].filter(Boolean)),
       h("div", { className: "st-inf" }, s.store + " / " + (s.type === "hour" ? "時給" : "月給"))
     ];
-    var card = h("div", { className: "st-card" + (state.sel === s.id ? " sel" : ""), onclick: function() { state.sel = s.id; render(); } }, [
+    list.appendChild(h("div", { className: "st-card" + (state.sel === s.id ? " sel" : ""), onclick: function() { state.sel = s.id; render(); } }, [
       h("div", { className: "st-av", style: { background: avColor(i) } }, s.name.charAt(0)),
       h("div", null, infoChildren)
-    ]);
-    list.appendChild(card);
+    ]));
   });
   leftPanel.appendChild(list);
   layout.appendChild(leftPanel);
@@ -381,19 +356,380 @@ function renderClockView() {
   return layout;
 }
 
+// ═══════════ ADMIN VIEW ═══════════
 function renderAdminView() {
   var layout = h("div", { className: "admin-layout" });
   var tabs = h("div", { className: "admin-tabs" });
-  [{ k: "staff", l: "👤 スタッフ管理" }, { k: "store", l: "🏪 店舗管理" }, { k: "records", l: "📝 打刻修正" }].forEach(function(t) {
+  [{ k: "staff", l: "👤 スタッフ管理" }, { k: "store", l: "🏪 店舗管理" }, { k: "records", l: "📝 打刻修正" }, { k: "monthly", l: "📊 月次集計" }, { k: "calendar", l: "📅 カレンダー" }].forEach(function(t) {
     tabs.appendChild(h("button", { className: "adm-tab" + (state.adminTab === t.k ? " active" : ""), onclick: function() { state.adminTab = t.k; render(); } }, t.l));
   });
   layout.appendChild(tabs);
   if (state.adminTab === "staff") layout.appendChild(renderStaffAdmin());
   else if (state.adminTab === "store") layout.appendChild(renderStoreAdmin());
-  else layout.appendChild(renderRecordsAdmin());
+  else if (state.adminTab === "records") layout.appendChild(renderRecordsAdmin());
+  else if (state.adminTab === "monthly") layout.appendChild(renderMonthlyAdmin());
+  else if (state.adminTab === "calendar") layout.appendChild(renderCalendarAdmin());
   return layout;
 }
 
+// ═══════════ 月次集計タブ ═══════════
+function renderMonthlyAdmin() {
+  var wrap = h("div");
+  var card = h("div", { className: "card" });
+  card.appendChild(h("div", { className: "card-t" }, "📊 月次給与一覧"));
+
+  // 月選択 + 店舗フィルタ
+  var controls = h("div", { className: "form-row" });
+  var parts = state.adminMonth.split("-");
+  var yr = parseInt(parts[0]), mo = parseInt(parts[1]);
+
+  var monthNav = h("div", { className: "cal-nav", style: { marginBottom: "0", justifyContent: "flex-start" } });
+  monthNav.appendChild(h("button", { className: "cal-arrow", onclick: function() { mo--; if (mo < 1) { mo = 12; yr--; } state.adminMonth = yr + "-" + String(mo).padStart(2,"0"); render(); } }, "◀"));
+  monthNav.appendChild(h("div", { className: "cal-month", style: { minWidth: "120px", fontSize: "16px" } }, yr + "年 " + mo + "月"));
+  monthNav.appendChild(h("button", { className: "cal-arrow", onclick: function() { mo++; if (mo > 12) { mo = 1; yr++; } state.adminMonth = yr + "-" + String(mo).padStart(2,"0"); render(); } }, "▶"));
+  monthNav.appendChild(h("button", { className: "today-btn", onclick: function() { var d = new Date(); state.adminMonth = d.getFullYear() + "-" + String(d.getMonth()+1).padStart(2,"0"); render(); } }, "今月"));
+  controls.appendChild(monthNav);
+
+  // 店舗フィルタ
+  var storeRow = h("div", { className: "store-filter-row" });
+  ["all"].concat(state.stores).forEach(function(st) {
+    storeRow.appendChild(h("button", { className: "chip" + (state.adminStoreFilter === st ? " active" : ""), onclick: function() { state.adminStoreFilter = st; render(); } }, st === "all" ? "全店舗" : st));
+  });
+  controls.appendChild(storeRow);
+  card.appendChild(controls);
+
+  // データ集計
+  var moKey = state.adminMonth;
+  var staffList = state.staff.filter(function(s) { return state.adminStoreFilter === "all" || s.store === state.adminStoreFilter; });
+  var summary = [];
+  var grandTotal = 0;
+
+  staffList.forEach(function(s) {
+    var moRecs = state.records.filter(function(r) { return r.staffId === s.id && r.date.substring(0, 7) === moKey; });
+    var days = 0, totalWork = 0, totalBrk = 0, salary = 0, transportTotal = 0;
+    moRecs.forEach(function(r) {
+      if (r.clockIn && r.clockOut) {
+        var w = diffMin(r.clockIn, r.clockOut);
+        var b = diffMin(r.breakStart, r.breakEnd);
+        var net = w - b;
+        totalWork += w; totalBrk += b; days++;
+        var rate = isWeekend(r.date) ? (s.rateH || s.rate || 0) : (s.rate || 0);
+        salary += Math.round(net / 60 * rate);
+        transportTotal += (s.transport || 0);
+      }
+    });
+    var total = salary + transportTotal;
+    grandTotal += total;
+    summary.push({ name: s.name, store: s.store, type: s.type, days: days, totalMin: totalWork - totalBrk, salary: salary, transport: transportTotal, total: total });
+  });
+
+  // サマリーカード
+  var sg = h("div", { className: "summary-grid" });
+  sg.appendChild(h("div", { className: "summary-item" }, [h("div", { className: "summary-val" }, staffList.length + "名"), h("div", { className: "summary-lbl" }, "対象スタッフ")]));
+  sg.appendChild(h("div", { className: "summary-item" }, [h("div", { className: "summary-val" }, "¥" + grandTotal.toLocaleString()), h("div", { className: "summary-lbl" }, "総支給額")]));
+  card.appendChild(sg);
+
+  // テーブル
+  var tbl = h("table", { className: "tbl" });
+  var thead = h("tr");
+  ["名前", "店舗", "形態", "出勤日数", "総実働", "給与", "交通費", "合計"].forEach(function(t) { thead.appendChild(h("th", null, t)); });
+  tbl.appendChild(thead);
+
+  summary.forEach(function(s) {
+    var tr = h("tr");
+    tr.appendChild(h("td", { style: { fontWeight: "600", color: "#e2e8f0" } }, s.name));
+    tr.appendChild(h("td", null, h("span", { className: "badge badge-b" }, s.store)));
+    tr.appendChild(h("td", null, s.type === "hour" ? "時給" : "月給"));
+    tr.appendChild(h("td", { style: { textAlign: "center" } }, s.days + "日"));
+    tr.appendChild(h("td", { style: { textAlign: "center", color: "#22d3ee", fontFamily: "'Courier New',monospace" } }, hm(s.totalMin)));
+    tr.appendChild(h("td", { style: { textAlign: "right", color: "#38bdf8" } }, "¥" + s.salary.toLocaleString()));
+    tr.appendChild(h("td", { style: { textAlign: "right", color: "#f59e0b" } }, "¥" + s.transport.toLocaleString()));
+    tr.appendChild(h("td", { style: { textAlign: "right", fontWeight: "700", color: "#4ade80" } }, "¥" + s.total.toLocaleString()));
+    tbl.appendChild(tr);
+  });
+
+  // 合計行
+  var totalRow = h("tr", { style: { borderTop: "2px solid #334155" } });
+  totalRow.appendChild(h("td", { style: { fontWeight: "700", color: "#e2e8f0" } }, "合計"));
+  totalRow.appendChild(h("td")); totalRow.appendChild(h("td"));
+  totalRow.appendChild(h("td"));
+  totalRow.appendChild(h("td"));
+  var totalSalary = summary.reduce(function(a, b) { return a + b.salary; }, 0);
+  var totalTransport = summary.reduce(function(a, b) { return a + b.transport; }, 0);
+  totalRow.appendChild(h("td", { style: { textAlign: "right", color: "#38bdf8", fontWeight: "700" } }, "¥" + totalSalary.toLocaleString()));
+  totalRow.appendChild(h("td", { style: { textAlign: "right", color: "#f59e0b", fontWeight: "700" } }, "¥" + totalTransport.toLocaleString()));
+  totalRow.appendChild(h("td", { style: { textAlign: "right", fontWeight: "700", color: "#4ade80", fontSize: "15px" } }, "¥" + grandTotal.toLocaleString()));
+  tbl.appendChild(totalRow);
+
+  card.appendChild(tbl);
+
+  // CSV出力ボタン
+  card.appendChild(h("div", { style: { marginTop: "16px", textAlign: "right" } }, [
+    h("button", { className: "btn btn-p", onclick: function() { exportMonthlySummaryCSV(summary, yr, mo); } }, "📊 月次集計CSV出力")
+  ]));
+
+  wrap.appendChild(card);
+  return wrap;
+}
+
+function exportMonthlySummaryCSV(summary, yr, mo) {
+  var BOM = "\uFEFF";
+  var header = "名前,店舗,形態,出勤日数,総実働(分),給与,交通費,合計\n";
+  var rows = summary.map(function(s) {
+    return s.name + "," + s.store + "," + (s.type === "hour" ? "時給" : "月給") + "," + s.days + "," + s.totalMin + "," + s.salary + "," + s.transport + "," + s.total;
+  });
+  var b = new Blob([BOM + header + rows.join("\n")], { type: "text/csv;charset=utf-8;" });
+  var url = URL.createObjectURL(b);
+  var a = document.createElement("a"); a.href = url; a.download = "toichi_月次集計_" + yr + "-" + String(mo).padStart(2,"0") + ".csv";
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  setTimeout(function() { URL.revokeObjectURL(url); }, 5000);
+  flash("月次集計CSVをダウンロードしました");
+}
+
+// ═══════════ カレンダータブ ═══════════
+function renderCalendarAdmin() {
+  var wrap = h("div");
+
+  // サブタブ
+  var modeTabs = h("div", { className: "cal-mode-tabs" });
+  modeTabs.appendChild(h("button", { className: "cal-mode" + (state.calMode === "all" ? " active" : ""), onclick: function() { state.calMode = "all"; render(); } }, "📋 全スタッフ（日別）"));
+  modeTabs.appendChild(h("button", { className: "cal-mode" + (state.calMode === "personal" ? " active" : ""), onclick: function() { state.calMode = "personal"; render(); } }, "👤 個人（月別カレンダー）"));
+  wrap.appendChild(modeTabs);
+
+  if (state.calMode === "all") {
+    wrap.appendChild(renderCalendarAllStaff());
+  } else {
+    wrap.appendChild(renderCalendarPersonal());
+  }
+
+  return wrap;
+}
+
+// 全スタッフ（日別）
+function renderCalendarAllStaff() {
+  var wrap = h("div");
+  var card = h("div", { className: "card" });
+  card.appendChild(h("div", { className: "card-t" }, "📋 全スタッフ 日別出退勤"));
+
+  var parts = state.adminMonth.split("-");
+  var yr = parseInt(parts[0]), mo = parseInt(parts[1]);
+
+  // 月ナビ
+  var monthNav = h("div", { className: "cal-nav" });
+  monthNav.appendChild(h("button", { className: "cal-arrow", onclick: function() { mo--; if (mo < 1) { mo = 12; yr--; } state.adminMonth = yr + "-" + String(mo).padStart(2,"0"); state.calDate = null; render(); } }, "◀"));
+  monthNav.appendChild(h("div", { className: "cal-month" }, yr + "年 " + mo + "月"));
+  monthNav.appendChild(h("button", { className: "cal-arrow", onclick: function() { mo++; if (mo > 12) { mo = 1; yr++; } state.adminMonth = yr + "-" + String(mo).padStart(2,"0"); state.calDate = null; render(); } }, "▶"));
+  monthNav.appendChild(h("button", { className: "today-btn", onclick: function() { var d = new Date(); state.adminMonth = d.getFullYear() + "-" + String(d.getMonth()+1).padStart(2,"0"); state.calDate = toK(new Date()); render(); } }, "今日"));
+  card.appendChild(monthNav);
+
+  // 店舗フィルタ
+  var storeRow = h("div", { className: "store-filter-row" });
+  ["all"].concat(state.stores).forEach(function(st) {
+    storeRow.appendChild(h("button", { className: "chip" + (state.adminStoreFilter === st ? " active" : ""), onclick: function() { state.adminStoreFilter = st; render(); } }, st === "all" ? "全店舗" : st));
+  });
+  card.appendChild(storeRow);
+
+  // 日付ボタン一覧（横スクロール）
+  var daysInMonth = new Date(yr, mo, 0).getDate();
+  var dateRow = h("div", { style: { display: "flex", gap: "4px", overflowX: "auto", paddingBottom: "8px", marginBottom: "16px" } });
+  var todayK = toK(now());
+
+  // デフォルトで今日を選択
+  if (!state.calDate || state.calDate.substring(0, 7) !== state.adminMonth) {
+    if (todayK.substring(0, 7) === state.adminMonth) state.calDate = todayK;
+    else state.calDate = yr + "-" + String(mo).padStart(2,"0") + "-01";
+  }
+
+  for (var d = 1; d <= daysInMonth; d++) {
+    (function(day) {
+      var dateStr = yr + "-" + String(mo).padStart(2,"0") + "-" + String(day).padStart(2,"0");
+      var dt = new Date(yr, mo - 1, day);
+      var dayOfWeek = ["日","月","火","水","木","金","土"][dt.getDay()];
+      var isSel = state.calDate === dateStr;
+      var isToday = dateStr === todayK;
+      var hasRec = state.records.some(function(r) { return r.date === dateStr; });
+      var dayColor = dt.getDay() === 0 ? "#f87171" : dt.getDay() === 6 ? "#60a5fa" : "#94a3b8";
+
+      dateRow.appendChild(h("button", {
+        className: "chip" + (isSel ? " active" : ""),
+        style: { minWidth: "48px", flexShrink: "0", flexDirection: "column", display: "flex", alignItems: "center", gap: "2px", padding: "6px 8px", position: "relative", borderColor: isToday && !isSel ? "#0ea5e950" : undefined },
+        onclick: function() { state.calDate = dateStr; render(); }
+      }, [
+        h("div", { style: { fontSize: "14px", fontWeight: "700", color: isSel ? "#22d3ee" : "#e2e8f0" } }, String(day)),
+        h("div", { style: { fontSize: "10px", color: isSel ? "#22d3ee" : dayColor } }, dayOfWeek),
+        hasRec ? h("div", { style: { width: "4px", height: "4px", borderRadius: "50%", background: "#22c55e", position: "absolute", bottom: "3px" } }) : null
+      ].filter(Boolean)));
+    })(d);
+  }
+  card.appendChild(dateRow);
+
+  // 選択された日のデータ
+  if (state.calDate) {
+    var selDate = state.calDate;
+    var selDt = new Date(selDate);
+    var selDayOfWeek = ["日","月","火","水","木","金","土"][selDt.getDay()];
+
+    card.appendChild(h("div", { style: { fontSize: "16px", fontWeight: "700", color: "#e2e8f0", marginBottom: "12px" } },
+      selDate + "（" + selDayOfWeek + "）の出退勤"));
+
+    var staffList = state.staff.filter(function(s) { return state.adminStoreFilter === "all" || s.store === state.adminStoreFilter; });
+    var tbl = h("table", { className: "tbl" });
+    var thead = h("tr");
+    ["名前", "店舗", "出勤", "退勤", "休憩", "実働"].forEach(function(t) { thead.appendChild(h("th", null, t)); });
+    tbl.appendChild(thead);
+
+    var anyData = false;
+    staffList.forEach(function(s) {
+      var dayRecs = state.records.filter(function(r) { return r.staffId === s.id && r.date === selDate; });
+      if (dayRecs.length === 0) {
+        // 出勤なし — 薄い行
+        var tr = h("tr");
+        tr.appendChild(h("td", { style: { color: "#475569" } }, s.name));
+        tr.appendChild(h("td", { style: { color: "#334155" } }, s.store));
+        tr.appendChild(h("td", { style: { color: "#334155" } }, "-"));
+        tr.appendChild(h("td", { style: { color: "#334155" } }, "-"));
+        tr.appendChild(h("td", { style: { color: "#334155" } }, "-"));
+        tr.appendChild(h("td", { style: { color: "#334155" } }, "-"));
+        tbl.appendChild(tr);
+      } else {
+        anyData = true;
+        dayRecs.forEach(function(r, ri) {
+          var tr = h("tr");
+          tr.appendChild(h("td", { style: { fontWeight: "600", color: "#e2e8f0" } }, ri === 0 ? s.name : ""));
+          tr.appendChild(h("td", null, ri === 0 ? h("span", { className: "badge badge-b" }, s.store) : txt("")));
+          tr.appendChild(h("td", { style: { color: "#22c55e" } }, fmt(r.clockIn)));
+          tr.appendChild(h("td", { style: { color: "#f59e0b" } }, fmt(r.clockOut)));
+          var brk = diffMin(r.breakStart, r.breakEnd);
+          tr.appendChild(h("td", null, brk > 0 ? brk + "分" : "-"));
+          var work = (r.clockIn && r.clockOut) ? diffMin(r.clockIn, r.clockOut) - brk : 0;
+          tr.appendChild(h("td", { style: { color: "#22d3ee", fontFamily: "'Courier New',monospace" } }, work > 0 ? hm(work) : "-"));
+          tbl.appendChild(tr);
+        });
+      }
+    });
+    card.appendChild(tbl);
+  }
+
+  wrap.appendChild(card);
+  return wrap;
+}
+
+// 個人（月別カレンダー）
+function renderCalendarPersonal() {
+  var wrap = h("div");
+  var card = h("div", { className: "card" });
+  card.appendChild(h("div", { className: "card-t" }, "👤 個人 月別勤怠カレンダー"));
+
+  // スタッフ選択チップ
+  var chips = h("div", { className: "staff-chips" });
+  state.staff.forEach(function(s, i) {
+    chips.appendChild(h("button", {
+      className: "chip" + (state.calStaff === s.id ? " active" : ""),
+      style: { borderColor: state.calStaff === s.id ? avColor(i) : undefined },
+      onclick: function() { state.calStaff = s.id; render(); }
+    }, s.name));
+  });
+  card.appendChild(chips);
+
+  if (!state.calStaff) {
+    card.appendChild(h("div", { style: { padding: "40px", textAlign: "center", color: "#475569" } }, "スタッフを選択してください"));
+    wrap.appendChild(card);
+    return wrap;
+  }
+
+  var sn = state.staff.find(function(x) { return x.id === state.calStaff; });
+  if (!sn) { wrap.appendChild(card); return wrap; }
+
+  var parts = state.adminMonth.split("-");
+  var yr = parseInt(parts[0]), mo = parseInt(parts[1]);
+
+  // 月ナビ
+  var monthNav = h("div", { className: "cal-nav" });
+  monthNav.appendChild(h("button", { className: "cal-arrow", onclick: function() { mo--; if (mo < 1) { mo = 12; yr--; } state.adminMonth = yr + "-" + String(mo).padStart(2,"0"); render(); } }, "◀"));
+  monthNav.appendChild(h("div", { className: "cal-month" }, yr + "年 " + mo + "月"));
+  monthNav.appendChild(h("button", { className: "cal-arrow", onclick: function() { mo++; if (mo > 12) { mo = 1; yr++; } state.adminMonth = yr + "-" + String(mo).padStart(2,"0"); render(); } }, "▶"));
+  monthNav.appendChild(h("button", { className: "today-btn", onclick: function() { var d = new Date(); state.adminMonth = d.getFullYear() + "-" + String(d.getMonth()+1).padStart(2,"0"); render(); } }, "今月"));
+  card.appendChild(monthNav);
+
+  var moKey = state.adminMonth;
+  var moRecs = state.records.filter(function(r) { return r.staffId === sn.id && r.date.substring(0, 7) === moKey; });
+
+  // 集計
+  var totalWork = 0, totalBrk = 0, days = 0, salary = 0, transportTotal = 0;
+  moRecs.forEach(function(r) {
+    if (r.clockIn && r.clockOut) {
+      var w = diffMin(r.clockIn, r.clockOut);
+      var b = diffMin(r.breakStart, r.breakEnd);
+      totalWork += w; totalBrk += b; days++;
+      var rate = isWeekend(r.date) ? (sn.rateH || sn.rate || 0) : (sn.rate || 0);
+      salary += Math.round((w - b) / 60 * rate);
+      transportTotal += (sn.transport || 0);
+    }
+  });
+  var net = totalWork - totalBrk;
+
+  // サマリー
+  var summary = h("div", { className: "cal-summary" });
+  summary.appendChild(h("span", null, "出勤日数: " + days + "日"));
+  summary.appendChild(h("span", null, "総実働: " + hm(net)));
+  summary.appendChild(h("span", null, "総休憩: " + totalBrk + "分"));
+  card.appendChild(summary);
+
+  // 給与情報
+  var salRow = h("div", { className: "cal-salary" });
+  salRow.appendChild(h("div", { className: "sal-card" }, [h("div", { className: "sal-v" }, "¥" + salary.toLocaleString()), h("div", { className: "sal-l" }, "給与")]));
+  salRow.appendChild(h("div", { className: "sal-card" }, [h("div", { className: "sal-v" }, "¥" + transportTotal.toLocaleString()), h("div", { className: "sal-l" }, "交通費")]));
+  salRow.appendChild(h("div", { className: "sal-card" }, [h("div", { className: "sal-v" }, "¥" + (salary + transportTotal).toLocaleString()), h("div", { className: "sal-l" }, "合計")]));
+  card.appendChild(salRow);
+
+  // カレンダーテーブル
+  var tbl = h("table", { className: "cal" });
+  var thead = h("tr");
+  ["日", "曜", "出勤", "退勤", "休憩", "実働"].forEach(function(t) { thead.appendChild(h("th", null, t)); });
+  tbl.appendChild(thead);
+
+  var daysInMonth = new Date(yr, mo, 0).getDate();
+  var todayK = toK(now());
+  for (var d = 1; d <= daysInMonth; d++) {
+    var dateStr = yr + "-" + String(mo).padStart(2, "0") + "-" + String(d).padStart(2, "0");
+    var dt = new Date(yr, mo - 1, d);
+    var dayOfWeek = ["日","月","火","水","木","金","土"][dt.getDay()];
+    var dayRecs = moRecs.filter(function(r) { return r.date === dateStr; });
+    var isToday = dateStr === todayK;
+
+    if (dayRecs.length === 0) {
+      var tr = h("tr");
+      tr.appendChild(h("td", { className: isToday ? "cal-today" : "" }, d));
+      tr.appendChild(h("td", { className: dt.getDay() === 0 ? "cal-sun" : dt.getDay() === 6 ? "cal-sat" : "" }, dayOfWeek));
+      tr.appendChild(h("td", null, "-")); tr.appendChild(h("td", null, "-")); tr.appendChild(h("td", null, "-")); tr.appendChild(h("td", null, "-"));
+      tbl.appendChild(tr);
+    } else {
+      dayRecs.forEach(function(r, ri) {
+        var tr = h("tr");
+        tr.appendChild(h("td", { className: isToday ? "cal-today" : "" }, ri === 0 ? d : ""));
+        tr.appendChild(h("td", { className: dt.getDay() === 0 ? "cal-sun" : dt.getDay() === 6 ? "cal-sat" : "" }, ri === 0 ? dayOfWeek : ""));
+        tr.appendChild(h("td", { style: { color: "#22c55e" } }, fmt(r.clockIn)));
+        tr.appendChild(h("td", { style: { color: "#f59e0b" } }, fmt(r.clockOut)));
+        var brk = diffMin(r.breakStart, r.breakEnd);
+        tr.appendChild(h("td", null, brk > 0 ? brk + "分" : "-"));
+        var work = (r.clockIn && r.clockOut) ? diffMin(r.clockIn, r.clockOut) - brk : 0;
+        tr.appendChild(h("td", { style: { color: "#22d3ee" } }, work > 0 ? hm(work) : "-"));
+        tbl.appendChild(tr);
+      });
+    }
+  }
+  card.appendChild(tbl);
+
+  // CSV出力
+  card.appendChild(h("div", { style: { marginTop: "12px", textAlign: "center" } }, [
+    h("button", { className: "btn btn-p", onclick: function() { exportCSV(sn, moRecs, yr, mo); } }, "📊 CSV出力")
+  ]));
+
+  wrap.appendChild(card);
+  return wrap;
+}
+
+// ═══════════ 既存の管理画面タブ（スタッフ・店舗・打刻修正）═══════════
 function renderStaffAdmin() {
   var wrap = h("div");
   var card = h("div", { className: "card" });
@@ -505,6 +841,7 @@ function renderRecordsAdmin() {
   return wrap;
 }
 
+// ═══════════ MODALS ═══════════
 function renderEditRecModal() {
   var bg = h("div", { className: "modal-bg", onclick: function(e) { if (e.target === bg) { state.editRec = null; render(); } } });
   var modal = h("div", { className: "modal modal-lg" });
@@ -625,15 +962,13 @@ function renderCalModal() {
   var totalWork = 0, totalBrk = 0, days = 0;
   moRecs.forEach(function(r) { if (r.clockIn && r.clockOut) { totalWork += diffMin(r.clockIn, r.clockOut); totalBrk += diffMin(r.breakStart, r.breakEnd); days++; } });
   var net = totalWork - totalBrk;
-  var isWeekend = function(dateStr) { var d = new Date(dateStr); var day = d.getDay(); return day === 0 || day === 6; };
   var salary = 0, transportTotal = 0;
   moRecs.forEach(function(r) { if (r.clockIn && r.clockOut) { var w = diffMin(r.clockIn, r.clockOut) - diffMin(r.breakStart, r.breakEnd); var rate = isWeekend(r.date) ? (sn.rateH || sn.rate || 0) : (sn.rate || 0); salary += Math.round(w / 60 * rate); transportTotal += (sn.transport || 0); } });
   var summary = h("div", { className: "cal-summary" });
   summary.appendChild(h("span", null, "出勤日数: " + days + "日"));
-  summary.appendChild(h("span", null, "総実働: " + Math.floor(net / 60) + "h " + (net % 60) + "m"));
+  summary.appendChild(h("span", null, "総実働: " + hm(net)));
   summary.appendChild(h("span", null, "総休憩: " + totalBrk + "分"));
   modal.appendChild(summary);
-  // 給与情報は管理画面からのみ表示
   if (state.view === "admin") {
     var salRow = h("div", { className: "cal-salary" });
     salRow.appendChild(h("div", { className: "sal-card" }, [h("div", { className: "sal-v" }, "¥" + salary.toLocaleString()), h("div", { className: "sal-l" }, "給与")]));
@@ -649,7 +984,7 @@ function renderCalModal() {
   for (var d = 1; d <= daysInMonth; d++) {
     var dateStr = yr + "-" + String(mo).padStart(2, "0") + "-" + String(d).padStart(2, "0");
     var dt = new Date(dateStr);
-    var dayOfWeek = ["日", "月", "火", "水", "木", "金", "土"][dt.getDay()];
+    var dayOfWeek = ["日","月","火","水","木","金","土"][dt.getDay()];
     var dayRecs = moRecs.filter(function(r) { return r.date === dateStr; });
     var isToday = dateStr === toK(now());
     if (dayRecs.length === 0) {
@@ -702,7 +1037,6 @@ function addStaffFn() {
   state.newName = ""; state.newTransport = "0";
   saveAll(); render();
 }
-
 function saveStaffEditFn() {
   if (!state.editStaff) return;
   state.staff = state.staff.map(function(s) { return s.id === state.editStaff.id ? state.editStaff : s; });
@@ -711,7 +1045,6 @@ function saveStaffEditFn() {
   flash("スタッフ情報を更新しました");
   saveAll(); render();
 }
-
 function confirmDeleteFn() {
   if (!state.confirmDel) return;
   var s = state.staff.find(function(x) { return x.id === state.confirmDel; });
@@ -722,7 +1055,6 @@ function confirmDeleteFn() {
   state.confirmDel = null;
   saveAll(); render();
 }
-
 function saveEdit() {
   if (!state.editRec) return;
   var rec = state.editRec;
@@ -744,7 +1076,6 @@ function saveEdit() {
   flash("打刻を保存しました");
   saveAll(); render();
 }
-
 function addStore() {
   if (!state.newStoreName.trim()) return;
   state.stores.push(state.newStoreName.trim());
@@ -753,7 +1084,6 @@ function addStore() {
   flash("店舗を追加しました");
   saveAll(); render();
 }
-
 function saveStoreEdit() {
   if (state.editStoreIdx === null || !state.editStoreName.trim()) return;
   var old = state.stores[state.editStoreIdx];
@@ -765,7 +1095,6 @@ function saveStoreEdit() {
   flash("店舗名を変更しました");
   saveAll(); render();
 }
-
 function deleteStore(idx) {
   var name = state.stores[idx];
   if (state.staff.some(function(s) { return s.store === name; })) { flash("この店舗にスタッフがいるため削除できません", "err"); return; }
@@ -774,26 +1103,18 @@ function deleteStore(idx) {
   flash("店舗を削除しました");
   saveAll(); render();
 }
-
 function exportCSV(sn, moRecs, yr, mo) {
   var BOM = "\uFEFF";
   var header = "日付,曜日,出勤,退勤,休憩(分),実働(分),備考\n";
   var rows = [];
   var daysInMonth = new Date(yr, mo, 0).getDate();
   for (var d = 1; d <= daysInMonth; d++) {
-    var dateStr = yr + "-" + String(mo).padStart(2, "0") + "-" + String(d).padStart(2, "0");
+    var dateStr = yr + "-" + String(mo).padStart(2,"0") + "-" + String(d).padStart(2,"0");
     var dt = new Date(dateStr);
     var dayOfWeek = ["日","月","火","水","木","金","土"][dt.getDay()];
     var dayRecs = moRecs.filter(function(r) { return r.date === dateStr; });
-    if (dayRecs.length === 0) {
-      rows.push(dateStr + "," + dayOfWeek + ",,,,," );
-    } else {
-      dayRecs.forEach(function(r) {
-        var brk = diffMin(r.breakStart, r.breakEnd);
-        var work = (r.clockIn && r.clockOut) ? diffMin(r.clockIn, r.clockOut) - brk : 0;
-        rows.push(dateStr + "," + dayOfWeek + "," + fmt(r.clockIn) + "," + fmt(r.clockOut) + "," + brk + "," + work + ",");
-      });
-    }
+    if (dayRecs.length === 0) { rows.push(dateStr + "," + dayOfWeek + ",,,,,"); }
+    else { dayRecs.forEach(function(r) { var brk = diffMin(r.breakStart, r.breakEnd); var work = (r.clockIn && r.clockOut) ? diffMin(r.clockIn, r.clockOut) - brk : 0; rows.push(dateStr + "," + dayOfWeek + "," + fmt(r.clockIn) + "," + fmt(r.clockOut) + "," + brk + "," + work + ","); }); }
   }
   var b = new Blob([BOM + header + rows.join("\n")], { type: "text/csv;charset=utf-8;" });
   var url = URL.createObjectURL(b);
@@ -806,7 +1127,6 @@ function exportCSV(sn, moRecs, yr, mo) {
 
 // ═══════════ INIT ═══════════
 render();
-// 時計だけ毎秒更新（DOM全体を再構築しない）
 setInterval(function() {
   if (state.view !== "clock") return;
   var n = now();
@@ -817,9 +1137,7 @@ setInterval(function() {
   if (bigT) bigT.textContent = timeH;
   if (bigS) bigS.textContent = timeS;
 }, 1000);
-// 起動時にサーバーから同期
 syncFromServer(false);
-// 定期同期
 setInterval(function() { syncFromServer(false); }, SYNC_INTERVAL);
 </script>
 </body>
