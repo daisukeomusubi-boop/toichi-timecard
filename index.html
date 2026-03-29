@@ -138,7 +138,9 @@ function syncFromServer(showFlashMsg) {
           var d = new Date(dateStr);
           dateStr = d.getFullYear() + "-" + String(d.getMonth()+1).padStart(2,"0") + "-" + String(d.getDate()).padStart(2,"0");
         }
-        return { staffId: String(r.staffId), date: dateStr, clockIn: r.clockIn || null, clockOut: r.clockOut || null, breakStart: r.breakStart || null, breakEnd: r.breakEnd || null, store: r.store || "" };
+        // 空文字・undefined → null に統一（有効なISO文字列のみ保持）
+        function normalizeTime(v) { var s = String(v || ""); return (s && s.length > 4) ? s : null; }
+        return { staffId: String(r.staffId), date: dateStr, clockIn: normalizeTime(r.clockIn), clockOut: normalizeTime(r.clockOut), breakStart: normalizeTime(r.breakStart), breakEnd: normalizeTime(r.breakEnd), store: String(r.store || "") };
       });
     }
     saveAll();
@@ -183,11 +185,18 @@ function punch(sid, act) {
     }
     if (li === -1) return;
     state.records[li][act] = ts;
-    apiPost({ action: "punch", isNew: false, record: { staffId: sid, date: todayK, origClockIn: latest.clockIn, clockIn: state.records[li].clockIn, clockOut: state.records[li].clockOut || "", breakStart: state.records[li].breakStart || "", breakEnd: state.records[li].breakEnd || "" } });
+    // 現在のレコードの全フィールドをそのまま送信（nullはそのまま）
+    var cur = state.records[li];
+    apiPost({ action: "punch", isNew: false, record: {
+      staffId: sid, date: todayK, origClockIn: latest.clockIn,
+      clockIn: cur.clockIn, clockOut: cur.clockOut,
+      breakStart: cur.breakStart, breakEnd: cur.breakEnd
+    }});
   }
   saveAll();
   var lb = { clockIn: "出勤", clockOut: "退勤", breakStart: "休憩入り", breakEnd: "休憩戻り" };
   flash((sn ? sn.name : "") + " — " + lb[act] + " " + fmt(ts));
+  render();
 }
 
 // ═══════════ HTML HELPERS ═══════════
@@ -713,14 +722,14 @@ function saveEdit() {
   if (rec._isNew) {
     if (!clean.clockIn) { flash("出勤時刻を入力してください", "err"); return; }
     state.records.push(clean);
-    apiPost({ action: "punch", isNew: true, record: { staffId: clean.staffId, date: clean.date, clockIn: clean.clockIn || "", clockOut: clean.clockOut || "", breakStart: clean.breakStart || "", breakEnd: clean.breakEnd || "", store: clean.store || "" } });
+    apiPost({ action: "punch", isNew: true, record: { staffId: clean.staffId, date: clean.date, clockIn: clean.clockIn, clockOut: clean.clockOut, breakStart: clean.breakStart, breakEnd: clean.breakEnd, store: clean.store || "" } });
   } else {
     var found = false;
     state.records = state.records.map(function(r) {
       if (!found && r.staffId === clean.staffId && r.date === clean.date && r.clockIn === rec._origClockIn) { found = true; return clean; }
       return r;
     });
-    apiPost({ action: "punch", isNew: false, record: { staffId: clean.staffId, date: clean.date, origClockIn: rec._origClockIn, clockIn: clean.clockIn || "", clockOut: clean.clockOut || "", breakStart: clean.breakStart || "", breakEnd: clean.breakEnd || "" } });
+    apiPost({ action: "punch", isNew: false, record: { staffId: clean.staffId, date: clean.date, origClockIn: rec._origClockIn, clockIn: clean.clockIn, clockOut: clean.clockOut, breakStart: clean.breakStart, breakEnd: clean.breakEnd } });
   }
   state.editRec = null;
   flash("打刻を保存しました");
