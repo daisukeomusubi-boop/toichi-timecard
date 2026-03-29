@@ -688,7 +688,7 @@ function addStaffFn() {
   if (!state.newStore || state.stores.indexOf(state.newStore) === -1) state.newStore = state.stores[0];
   var newStaff = { id: "s" + Date.now(), name: state.newName.trim(), store: state.newStore, type: state.newType, rate: parseInt(state.newRate) || 0, rateH: parseInt(state.newRateH) || 0, transport: parseInt(state.newTransport) || 0 };
   state.staff.push(newStaff);
-  apiPost({ action: "addStaff", staff: newStaff });
+  apiPost({ action: "addStaff", staff: newStaff }, function() { setTimeout(function() { syncFromServer(false); }, 2000); });
   flash(state.newName.trim() + "さんを追加しました");
   state.newName = ""; state.newTransport = "0";
   saveAll(); render();
@@ -697,7 +697,7 @@ function addStaffFn() {
 function saveStaffEditFn() {
   if (!state.editStaff) return;
   state.staff = state.staff.map(function(s) { return s.id === state.editStaff.id ? state.editStaff : s; });
-  apiPost({ action: "updateStaff", staff: state.editStaff });
+  apiPost({ action: "updateStaff", staff: state.editStaff }, function() { setTimeout(function() { syncFromServer(false); }, 2000); });
   state.editStaff = null;
   flash("スタッフ情報を更新しました");
   saveAll(); render();
@@ -706,7 +706,7 @@ function saveStaffEditFn() {
 function confirmDeleteFn() {
   if (!state.confirmDel) return;
   var s = state.staff.find(function(x) { return x.id === state.confirmDel; });
-  apiPost({ action: "deleteStaff", staffId: state.confirmDel });
+  apiPost({ action: "deleteStaff", staffId: state.confirmDel }, function() { setTimeout(function() { syncFromServer(false); }, 2000); });
   state.staff = state.staff.filter(function(x) { return x.id !== state.confirmDel; });
   state.records = state.records.filter(function(x) { return x.staffId !== state.confirmDel; });
   flash((s ? s.name : "") + "さんを削除しました");
@@ -739,7 +739,7 @@ function saveEdit() {
 function addStore() {
   if (!state.newStoreName.trim()) return;
   state.stores.push(state.newStoreName.trim());
-  apiPost({ action: "addStore", storeName: state.newStoreName.trim() });
+  apiPost({ action: "addStore", storeName: state.newStoreName.trim() }, function() { setTimeout(function() { syncFromServer(false); }, 2000); });
   state.newStoreName = "";
   flash("店舗を追加しました");
   saveAll(); render();
@@ -751,7 +751,7 @@ function saveStoreEdit() {
   var newName = state.editStoreName.trim();
   state.stores[state.editStoreIdx] = newName;
   state.staff = state.staff.map(function(s) { return s.store === old ? Object.assign({}, s, { store: newName }) : s; });
-  apiPost({ action: "updateStore", oldName: old, newName: newName });
+  apiPost({ action: "updateStore", oldName: old, newName: newName }, function() { setTimeout(function() { syncFromServer(false); }, 2000); });
   state.editStoreIdx = null;
   flash("店舗名を変更しました");
   saveAll(); render();
@@ -761,7 +761,7 @@ function deleteStore(idx) {
   var name = state.stores[idx];
   if (state.staff.some(function(s) { return s.store === name; })) { flash("この店舗にスタッフがいるため削除できません", "err"); return; }
   state.stores = state.stores.filter(function(_, i) { return i !== idx; });
-  apiPost({ action: "deleteStore", storeName: name });
+  apiPost({ action: "deleteStore", storeName: name }, function() { setTimeout(function() { syncFromServer(false); }, 2000); });
   flash("店舗を削除しました");
   saveAll(); render();
 }
