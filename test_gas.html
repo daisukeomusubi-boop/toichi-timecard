@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html><head><meta charset="UTF-8"><title>GAS通信テスト</title></head>
+<body style="font-family:sans-serif;padding:20px;background:#1a1a2e;color:#eee;">
+<h2>GAS通信テスト</h2>
+<div id="log" style="white-space:pre-wrap;background:#0f0f23;padding:15px;border-radius:8px;font-family:monospace;font-size:13px;max-height:500px;overflow:auto;"></div>
+<script>
+var GAS_URL = "https://script.google.com/macros/s/AKfycbwPcLeqrT4ecdYZckSCASbq-WdjxHQPeQ_w70cB4qEM4fIY-fvUUAqYXNljRIzyJoNqYw/exec";
+var logEl = document.getElementById("log");
+function log(msg) { logEl.textContent += new Date().toLocaleTimeString() + " " + msg + "\n"; }
+
+// テスト1: GET (fetch redirect:follow)
+log("=== テスト1: GET fetch redirect:follow ===");
+fetch(GAS_URL + "?action=getAll", { redirect: "follow" })
+  .then(function(r) { log("GET status: " + r.status + " type: " + r.type); return r.text(); })
+  .then(function(t) { log("GET response: " + t.substring(0, 200)); try { var j = JSON.parse(t); log("GET JSON parse: OK, ok=" + j.ok); } catch(e) { log("GET JSON parse FAIL: " + e.message); } })
+  .catch(function(e) { log("GET ERROR: " + e.message); });
+
+// テスト2: POST (Content-Type: text/plain)
+setTimeout(function() {
+  log("\n=== テスト2: POST text/plain ===");
+  fetch(GAS_URL, {
+    method: "POST",
+    headers: { "Content-Type": "text/plain" },
+    body: JSON.stringify({ action: "ping" }),
+    redirect: "follow"
+  })
+    .then(function(r) { log("POST status: " + r.status + " type: " + r.type); return r.text(); })
+    .then(function(t) { log("POST response: " + t.substring(0, 200)); })
+    .catch(function(e) { log("POST ERROR: " + e.message); });
+}, 2000);
+
+// テスト3: POST via GET (データをURLパラメータに変換)
+setTimeout(function() {
+  log("\n=== テスト3: POST via GET ===");
+  var data = encodeURIComponent(JSON.stringify({ action: "ping" }));
+  fetch(GAS_URL + "?action=post&data=" + data, { redirect: "follow" })
+    .then(function(r) { log("POST-via-GET status: " + r.status + " type: " + r.type); return r.text(); })
+    .then(function(t) { log("POST-via-GET response: " + t.substring(0, 200)); })
+    .catch(function(e) { log("POST-via-GET ERROR: " + e.message); });
+}, 4000);
+</script>
+</body></html>
