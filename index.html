@@ -147,8 +147,17 @@ function syncFromServer(showFlashMsg) {
       state.records = data.records.map(function(r) {
         var dateStr = String(r.date);
         if (dateStr.indexOf("T") !== -1) { var d = new Date(dateStr); dateStr = d.getFullYear() + "-" + String(d.getMonth()+1).padStart(2,"0") + "-" + String(d.getDate()).padStart(2,"0"); }
-        function normalizeTime(v) { var s = String(v || ""); return (s && s.length > 4) ? s : null; }
-        return { staffId: String(r.staffId), date: dateStr, clockIn: normalizeTime(r.clockIn), clockOut: normalizeTime(r.clockOut), breakStart: normalizeTime(r.breakStart), breakEnd: normalizeTime(r.breakEnd), store: String(r.store || "") };
+        function normalizeTime(v, recDate) {
+          var s = String(v || ""); if (!s || s === "null" || s === "undefined" || s.length < 4) return null;
+          // すでにISO形式ならそのまま
+          if (s.indexOf("T") !== -1) return s;
+          // HH:MM形式 → ISO文字列に変換（日付 + 時刻）
+          if (/^\d{1,2}:\d{2}/.test(s)) { return new Date(recDate + "T" + s.substring(0,5) + ":00").toISOString(); }
+          // GASのDate型がJSON化された場合（例: "Mon Mar 31 2026 09:00:00 GMT+0900"）
+          try { var pd = new Date(s); if (!isNaN(pd.getTime())) return pd.toISOString(); } catch(e) {}
+          return null;
+        }
+        return { staffId: String(r.staffId), date: dateStr, clockIn: normalizeTime(r.clockIn, dateStr), clockOut: normalizeTime(r.clockOut, dateStr), breakStart: normalizeTime(r.breakStart, dateStr), breakEnd: normalizeTime(r.breakEnd, dateStr), store: String(r.store || "") };
       });
     }
     saveAll();
@@ -890,7 +899,7 @@ function renderRecordsAdmin() {
   staffSel.appendChild(h("option", { value: "" }, "-- スタッフ選択 --"));
   state.staff.forEach(function(s) { var o = h("option", { value: s.id }, s.name + "（" + s.store + "）"); if (s.id === state.editRecStaff) o.selected = true; staffSel.appendChild(o); });
   row.appendChild(h("div", { className: "form-g" }, [h("label", null, "スタッフ"), staffSel]));
-  row.appendChild(h("div", { className: "form-g" }, [h("label", null, "日付"), h("input", { type: "text", value: state.editRecDate || toK(now()), onchange: function(e) { state.editRecDate = e.target.value; render(); } })]));
+  row.appendChild(h("div", { className: "form-g" }, [h("label", null, "日付"), h("input", { type: "date", value: state.editRecDate || toK(now()), onchange: function(e) { state.editRecDate = e.target.value; render(); } })]));
   row.appendChild(h("div", { className: "form-g", style: { justifyContent: "flex-end" } }, [h("button", { className: "btn btn-p", onclick: function() { if (!state.editRecStaff) { flash("スタッフを選択してください", "err"); return; } var dateVal = state.editRecDate || toK(now()); state.editRec = { staffId: state.editRecStaff, date: dateVal, clockIn: null, clockOut: null, breakStart: null, breakEnd: null, _isNew: true }; render(); } }, "+ 手動追加")]));
   card.appendChild(row);
   if (state.editRecStaff) {
