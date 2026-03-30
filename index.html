@@ -1164,10 +1164,11 @@ function saveEdit() {
   } else {
     var found = false;
     state.records = state.records.map(function(r) {
-      if (!found && r.staffId === clean.staffId && r.date === clean.date && r.clockIn === rec._origClockIn) { found = true; return clean; }
+      if (!found && r.staffId === clean.staffId && r.date === clean.date && fmt(r.clockIn) === fmt(rec._origClockIn)) { found = true; return clean; }
       return r;
     });
-    apiPost({ action: "punch", isNew: false, record: { staffId: clean.staffId, date: clean.date, origClockIn: rec._origClockIn, clockIn: clean.clockIn, clockOut: clean.clockOut, breakStart: clean.breakStart, breakEnd: clean.breakEnd } }, function() { setTimeout(function() { syncFromServer(false); }, 2000); });
+    // origClockInをHH:MM形式で送信（GAS側もHH:MMで比較するので形式が一致する）
+    apiPost({ action: "punch", isNew: false, record: { staffId: clean.staffId, date: clean.date, origClockIn: fmt(rec._origClockIn), clockIn: clean.clockIn, clockOut: clean.clockOut, breakStart: clean.breakStart, breakEnd: clean.breakEnd } }, function() { setTimeout(function() { syncFromServer(false); }, 2000); });
   }
   state.editRec = null;
   flash("打刻を保存しました");
