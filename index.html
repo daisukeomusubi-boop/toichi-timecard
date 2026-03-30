@@ -723,14 +723,18 @@ function renderCalendarPersonal() {
 
   // 集計
   var totalWork = 0, totalBrk = 0, days = 0, salary = 0, transportTotal = 0;
+  var weekdayMin = 0, holidayMin = 0;
   moRecs.forEach(function(r) {
     if (r.clockIn && r.clockOut) {
       var w = diffMin(r.clockIn, r.clockOut);
       var b = diffMin(r.breakStart, r.breakEnd);
+      var netMin = w - b;
       totalWork += w; totalBrk += b; days++;
-      var rate = isHolidayOrWeekend(r.date) ? (sn.rateH || sn.rate || 0) : (sn.rate || 0);
-      salary += Math.round((w - b) / 60 * rate);
+      var isHol = isHolidayOrWeekend(r.date);
+      var rate = isHol ? (sn.rateH || sn.rate || 0) : (sn.rate || 0);
+      salary += Math.round(netMin / 60 * rate);
       transportTotal += (sn.transport || 0);
+      if (isHol) { holidayMin += netMin; } else { weekdayMin += netMin; }
     }
   });
   var net = totalWork - totalBrk;
@@ -741,6 +745,10 @@ function renderCalendarPersonal() {
   summary.appendChild(h("span", null, "総実働: " + hm(net)));
   summary.appendChild(h("span", null, "総休憩: " + totalBrk + "分"));
   card.appendChild(summary);
+  var summary2 = h("div", { className: "cal-summary" });
+  summary2.appendChild(h("span", null, "平日: " + hm(weekdayMin)));
+  summary2.appendChild(h("span", null, "土日祝: " + hm(holidayMin)));
+  card.appendChild(summary2);
 
   // 給与情報
   var salRow = h("div", { className: "cal-salary" });
@@ -882,8 +890,8 @@ function renderRecordsAdmin() {
   staffSel.appendChild(h("option", { value: "" }, "-- スタッフ選択 --"));
   state.staff.forEach(function(s) { var o = h("option", { value: s.id }, s.name + "（" + s.store + "）"); if (s.id === state.editRecStaff) o.selected = true; staffSel.appendChild(o); });
   row.appendChild(h("div", { className: "form-g" }, [h("label", null, "スタッフ"), staffSel]));
-  row.appendChild(h("div", { className: "form-g" }, [h("label", null, "日付"), h("input", { type: "text", value: state.editRecDate || toK(now()), oninput: function(e) { state.editRecDate = e.target.value; render(); } })]));
-  row.appendChild(h("div", { className: "form-g", style: { justifyContent: "flex-end" } }, [h("button", { className: "btn btn-p", onclick: function() { if (!state.editRecStaff) { flash("スタッフを選択してください", "err"); return; } state.editRec = { staffId: state.editRecStaff, date: state.editRecDate || toK(now()), clockIn: null, clockOut: null, breakStart: null, breakEnd: null, _isNew: true }; render(); } }, "+ 手動追加")]));
+  row.appendChild(h("div", { className: "form-g" }, [h("label", null, "日付"), h("input", { type: "text", value: state.editRecDate || toK(now()), onchange: function(e) { state.editRecDate = e.target.value; render(); } })]));
+  row.appendChild(h("div", { className: "form-g", style: { justifyContent: "flex-end" } }, [h("button", { className: "btn btn-p", onclick: function() { if (!state.editRecStaff) { flash("スタッフを選択してください", "err"); return; } var dateVal = state.editRecDate || toK(now()); state.editRec = { staffId: state.editRecStaff, date: dateVal, clockIn: null, clockOut: null, breakStart: null, breakEnd: null, _isNew: true }; render(); } }, "+ 手動追加")]));
   card.appendChild(row);
   if (state.editRecStaff) {
     var dateK = state.editRecDate || toK(now());
@@ -1134,14 +1142,14 @@ function saveEdit() {
   if (rec._isNew) {
     if (!clean.clockIn) { flash("出勤時刻を入力してください", "err"); return; }
     state.records.push(clean);
-    apiPost({ action: "punch", isNew: true, record: { staffId: clean.staffId, date: clean.date, clockIn: clean.clockIn, clockOut: clean.clockOut, breakStart: clean.breakStart, breakEnd: clean.breakEnd, store: clean.store || "" } });
+    apiPost({ action: "punch", isNew: true, record: { staffId: clean.staffId, date: clean.date, clockIn: clean.clockIn, clockOut: clean.clockOut, breakStart: clean.breakStart, breakEnd: clean.breakEnd, store: clean.store || "" } }, function() { setTimeout(function() { syncFromServer(false); }, 2000); });
   } else {
     var found = false;
     state.records = state.records.map(function(r) {
       if (!found && r.staffId === clean.staffId && r.date === clean.date && r.clockIn === rec._origClockIn) { found = true; return clean; }
       return r;
     });
-    apiPost({ action: "punch", isNew: false, record: { staffId: clean.staffId, date: clean.date, origClockIn: rec._origClockIn, clockIn: clean.clockIn, clockOut: clean.clockOut, breakStart: clean.breakStart, breakEnd: clean.breakEnd } });
+    apiPost({ action: "punch", isNew: false, record: { staffId: clean.staffId, date: clean.date, origClockIn: rec._origClockIn, clockIn: clean.clockIn, clockOut: clean.clockOut, breakStart: clean.breakStart, breakEnd: clean.breakEnd } }, function() { setTimeout(function() { syncFromServer(false); }, 2000); });
   }
   state.editRec = null;
   flash("打刻を保存しました");
