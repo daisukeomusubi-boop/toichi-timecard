@@ -1011,14 +1011,16 @@ function renderPinModal() {
   [1,2,3,4,5,6,7,8,9,"",0,"⌫"].forEach(function(k) {
     if (k === "") { pad.appendChild(h("div")); return; }
     pad.appendChild(h("button", { className: "pin-key", onclick: function() {
-      if (k === "⌫") { state.pin = state.pin.slice(0, -1); render(); return; }
+      if (k === "⌫") { state.pin = state.pin.slice(0, -1); updatePinDots(); return; }
       if (state.pin.length >= 4) return;
       state.pin += String(k);
+      updatePinDots();
       if (state.pin.length === 4) {
-        if (state.pin === ADMIN_PIN) { state.view = "admin"; state.showPin = false; state.pin = ""; }
-        else { flash("PINが違います", "err"); state.pin = ""; }
+        setTimeout(function() {
+          if (state.pin === ADMIN_PIN) { state.view = "admin"; state.showPin = false; state.pin = ""; render(); }
+          else { flash("PINが違います", "err"); state.pin = ""; updatePinDots(); }
+        }, 150);
       }
-      render();
     } }, String(k)));
   });
   modal.appendChild(pad);
@@ -1027,6 +1029,13 @@ function renderPinModal() {
   ]));
   bg.appendChild(modal);
   return bg;
+}
+function updatePinDots() {
+  var dotsEl = document.querySelectorAll(".pin-dot");
+  dotsEl.forEach(function(dot, i) {
+    dot.style.borderColor = i < state.pin.length ? "#0ea5e9" : "#334155";
+    dot.textContent = i < state.pin.length ? "●" : "";
+  });
 }
 
 function renderCalModal() {
