@@ -147,17 +147,17 @@ function syncFromServer(showFlashMsg) {
       state.records = data.records.map(function(r) {
         var dateStr = String(r.date);
         if (dateStr.indexOf("T") !== -1) { var d = new Date(dateStr); dateStr = d.getFullYear() + "-" + String(d.getMonth()+1).padStart(2,"0") + "-" + String(d.getDate()).padStart(2,"0"); }
-        function normalizeTime(v, recDate) {
+        function normalizeTime(v) {
           var s = String(v || ""); if (!s || s === "null" || s === "undefined" || s.length < 4) return null;
-          // すでにISO形式ならそのまま
-          if (s.indexOf("T") !== -1) return s;
-          // HH:MM形式 → ISO文字列に変換（日付 + 時刻）
-          if (/^\d{1,2}:\d{2}/.test(s)) { return new Date(recDate + "T" + s.substring(0,5) + ":00").toISOString(); }
-          // GASのDate型がJSON化された場合（例: "Mon Mar 31 2026 09:00:00 GMT+0900"）
-          try { var pd = new Date(s); if (!isNaN(pd.getTime())) return pd.toISOString(); } catch(e) {}
+          // HH:MM形式ならそのまま
+          if (/^\d{1,2}:\d{2}$/.test(s)) return s.length === 4 ? "0" + s : s;
+          // ISO形式やDate文字列 → HH:MMに変換
+          try { var d = new Date(s); if (!isNaN(d.getTime())) return String(d.getHours()).padStart(2,"0") + ":" + String(d.getMinutes()).padStart(2,"0"); } catch(e) {}
+          // HH:MM:SS等
+          var m = s.match(/(\d{1,2}):(\d{2})/); if (m) return String(m[1]).padStart(2,"0") + ":" + m[2];
           return null;
         }
-        return { staffId: String(r.staffId), date: dateStr, clockIn: normalizeTime(r.clockIn, dateStr), clockOut: normalizeTime(r.clockOut, dateStr), breakStart: normalizeTime(r.breakStart, dateStr), breakEnd: normalizeTime(r.breakEnd, dateStr), store: String(r.store || "") };
+        return { staffId: String(r.staffId), date: dateStr, clockIn: normalizeTime(r.clockIn), clockOut: normalizeTime(r.clockOut), breakStart: normalizeTime(r.breakStart), breakEnd: normalizeTime(r.breakEnd), store: String(r.store || "") };
       });
     }
     saveAll();
@@ -169,8 +169,9 @@ function syncFromServer(showFlashMsg) {
 // ═══════════ UTILS ═══════════
 function now() { return new Date(); }
 function toK(d) { return d.getFullYear() + "-" + String(d.getMonth()+1).padStart(2,"0") + "-" + String(d.getDate()).padStart(2,"0"); }
-function fmt(iso) { if (!iso) return "--:--"; var d = new Date(iso); return String(d.getHours()).padStart(2,"0") + ":" + String(d.getMinutes()).padStart(2,"0"); }
-function diffMin(a, b) { if (!a || !b) return 0; return Math.round((new Date(b) - new Date(a)) / 60000); }
+function fmt(v) { if (!v) return "--:--"; if (/^\d{1,2}:\d{2}/.test(v)) { var p = v.split(":"); return String(p[0]).padStart(2,"0") + ":" + p[1]; } var d = new Date(v); if (isNaN(d.getTime())) return "--:--"; return String(d.getHours()).padStart(2,"0") + ":" + String(d.getMinutes()).padStart(2,"0"); }
+function diffMin(a, b) { if (!a || !b) return 0; function toMin(v) { if (/^\d{1,2}:\d{2}/.test(v)) { var p = v.split(":"); return parseInt(p[0]) * 60 + parseInt(p[1]); } var d = new Date(v); return d.getHours() * 60 + d.getMinutes(); } return toMin(b) - toMin(a); }
+function nowHHMM() { var d = now(); return String(d.getHours()).padStart(2,"0") + ":" + String(d.getMinutes()).padStart(2,"0"); }
 function flash(msg, type) { if (state.toastTimer) clearTimeout(state.toastTimer); state.toast = { msg: msg, type: type || "ok" }; render(); state.toastTimer = setTimeout(function() { state.toast = null; render(); }, 2500); }
 var avColors = ["#0ea5e9","#8b5cf6","#f59e0b","#10b981","#ec4899","#06b6d4","#f97316","#6366f1"];
 function avColor(i) { return avColors[i % avColors.length]; }
@@ -190,7 +191,7 @@ function isHolidayOrWeekend(dateStr) { return isWeekend(dateStr) || isHoliday(da
 
 // ═══════════ PUNCH ═══════════
 function punch(sid, act) {
-  var ts = new Date().toISOString();
+  var ts = nowHHMM();
   var todayK = toK(now());
   var sn = state.staff.find(function(x) { return x.id === sid; });
   var storeName = sn ? sn.store : "";
@@ -206,16 +207,16 @@ function punch(sid, act) {
     var li = -1;
     for (var i = state.records.length - 1; i >= 0; i--) {
       var r = state.records[i];
-      if (r.staffId === sid && r.date === todayK && r.clockIn === latest.clockIn) { li = i; break; }
+      if (r.staffId === sid && r.date === todayK && fmt(r.clockIn) === fmt(latest.clockIn)) { li = i; break; }
     }
     if (li === -1) return;
     state.records[li][act] = ts;
     var cur = state.records[li];
-    apiPost({ action: "punch", isNew: false, record: { staffId: sid, date: todayK, origClockIn: latest.clockIn, clockIn: cur.clockIn, clockOut: cur.clockOut, breakStart: cur.breakStart, breakEnd: cur.breakEnd }});
+    apiPost({ action: "punch", isNew: false, record: { staffId: sid, date: todayK, origClockIn: fmt(latest.clockIn), clockIn: cur.clockIn, clockOut: cur.clockOut, breakStart: cur.breakStart, breakEnd: cur.breakEnd }});
   }
   saveAll();
   var lb = { clockIn: "出勤", clockOut: "退勤", breakStart: "休憩入り", breakEnd: "休憩戻り" };
-  flash((sn ? sn.name : "") + " — " + lb[act] + " " + fmt(ts));
+  flash((sn ? sn.name : "") + " — " + lb[act] + " " + ts);
   render();
 }
 
@@ -947,7 +948,7 @@ function renderEditRecModal() {
       h("input", { type: "time", value: val.replace("--:--", ""), oninput: (function(field) { return function(e) {
         var val = e.target.value;
         if (!val) { state.editRec[field] = null; return; }
-        state.editRec[field] = new Date((state.editRec.date || toK(now())) + "T" + val + ":00").toISOString();
+        state.editRec[field] = val;
       }; })(f) })
     ]));
   });
