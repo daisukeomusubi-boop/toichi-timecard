@@ -97,7 +97,7 @@ var state = {
   showCal: false, toast: null, toastTimer: null,
   newName: "", newStore: "", newType: "hour", newRate: "", newRateH: "", newTransport: "0",
   editStaff: null, confirmDel: null, editStoreIdx: null, editStoreName: "",
-  newStoreName: "", editRec: null,
+  newStoreName: "", editRec: null, confirmDelRec: null,
   editRecStaff: "", editRecDate: "",
   syncStatus: "idle",
   // 新規: 管理画面用
@@ -919,7 +919,10 @@ function renderRecordsAdmin() {
         tr.appendChild(h("td", null, fmt(r.clockOut)));
         tr.appendChild(h("td", null, fmt(r.breakStart)));
         tr.appendChild(h("td", null, fmt(r.breakEnd)));
-        tr.appendChild(h("td", null, h("button", { className: "btn btn-s", onclick: function() { state.editRec = JSON.parse(JSON.stringify(r)); state.editRec._isNew = false; state.editRec._origClockIn = r.clockIn; render(); } }, "編集")));
+        var btnWrap = h("div", { style: { display: "flex", gap: "6px" } });
+        btnWrap.appendChild(h("button", { className: "btn btn-s", onclick: function() { state.editRec = JSON.parse(JSON.stringify(r)); state.editRec._isNew = false; state.editRec._origClockIn = r.clockIn; render(); } }, "編集"));
+        btnWrap.appendChild(h("button", { className: "btn btn-d", style: { fontSize: "12px", padding: "6px 12px" }, onclick: (function(rec) { return function() { state.confirmDelRec = rec; render(); }; })(r) }, "削除"));
+        tr.appendChild(h("td", null, btnWrap));
         tbl.appendChild(tr);
       });
       card.appendChild(tbl);
@@ -927,6 +930,7 @@ function renderRecordsAdmin() {
   }
   wrap.appendChild(card);
   if (state.editRec) wrap.appendChild(renderEditRecModal());
+  if (state.confirmDelRec) wrap.appendChild(renderConfirmDelRecModal());
   return wrap;
 }
 
@@ -1151,6 +1155,37 @@ function confirmDeleteFn() {
   state.records = state.records.filter(function(x) { return x.staffId !== state.confirmDel; });
   flash((s ? s.name : "") + "さんを削除しました");
   state.confirmDel = null;
+  saveAll(); render();
+}
+function renderConfirmDelRecModal() {
+  var r = state.confirmDelRec;
+  var sn = state.staff.find(function(x) { return x.id === r.staffId; });
+  var bg = h("div", { className: "modal-bg", onclick: function(e) { if (e.target === bg) { state.confirmDelRec = null; render(); } } });
+  var modal = h("div", { className: "modal" });
+  modal.appendChild(h("div", { className: "modal-title" }, "打刻削除の確認"));
+  modal.appendChild(h("div", { style: { color: "#94a3b8", marginBottom: "20px", lineHeight: "1.8" } }, [
+    txt((sn ? sn.name : "") + "さんの打刻記録を削除しますか？"),
+    h("br"),
+    txt("日付: " + r.date + "　出勤: " + fmt(r.clockIn) + "　退勤: " + fmt(r.clockOut))
+  ]));
+  var btnRow = h("div", { style: { display: "flex", gap: "12px" } });
+  btnRow.appendChild(h("button", { className: "modal-cancel", onclick: function() { state.confirmDelRec = null; render(); } }, "キャンセル"));
+  btnRow.appendChild(h("button", { className: "modal-del", onclick: function() { deleteRecord(r); } }, "削除する"));
+  modal.appendChild(btnRow);
+  bg.appendChild(modal);
+  return bg;
+}
+function deleteRecord(rec) {
+  // ローカルから削除
+  var found = false;
+  state.records = state.records.filter(function(r) {
+    if (!found && r.staffId === rec.staffId && r.date === rec.date && fmt(r.clockIn) === fmt(rec.clockIn)) { found = true; return false; }
+    return true;
+  });
+  // GASから削除
+  apiPost({ action: "deleteRecord", record: { staffId: rec.staffId, date: rec.date, clockIn: fmt(rec.clockIn) } }, function() { setTimeout(function() { syncFromServer(false); }, 2000); });
+  state.confirmDelRec = null;
+  flash("打刻を削除しました");
   saveAll(); render();
 }
 function saveEdit() {
